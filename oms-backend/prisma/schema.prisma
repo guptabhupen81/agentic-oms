@@ -1,0 +1,412 @@
+// ============================================================================
+// OMS Domain Model
+// Design notes:
+// - Product hierarchy is self-referencing (supports 5-6+ levels without schema change)
+// - Every stock-bearing transaction line references a Batch (never just a Product)
+//   so FEFO (First Expiry First Out) allocation is always possible.
+// - Allocation is its own table (not just a field on OrderLine) so the Order
+//   Allocation Agent's decisions are auditable: which batch(es) fulfilled which line, and why.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity / Actors
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  OMS_EXECUTIVE
+  PRESELLER
+  WAREHOUSE_INCHARGE
+  VAN_SELLER
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime   @default(now())
+
+  ordersCreated   Order[]      @relation("OrderCreatedBy")
+  picklists       Picklist[]   @relation("PicklistAssignedTo")
+  vanLoads        VanLoad[]    @relation("VanLoadOperator")
+}
+
+// ---------------------------------------------------------------------------
+// Product Hierarchy (self-referencing => supports N levels, e.g. 5-6)
+// e.g. Category -> Sub-Category -> Brand -> Sub-Brand -> SKU Group -> SKU node
+// ---------------------------------------------------------------------------
+
+model ProductHierarchyNode {
+  id        String                 @id @default(cuid())
+  name      String
+  level     Int                    // 1 = top of hierarchy, increases downward
+  parentId  String?
+  parent    ProductHierarchyNode?  @relation("HierarchyTree", fields: [parentId], references: [id])
+  children  ProductHierarchyNode[] @relation("HierarchyTree")
+  products  Product[]
+
+  @@index([parentId])
+}
+
+model Manufacturer {
+  id        String        @id @default(cuid())
+  name      String
+  gstin     String?
+  createdAt DateTime      @default(now())
+
+  products         Product[]
+  batches          Batch[]
+  purchaseOrders   PurchaseOrder[]
+}
+
+model Product {
+  id                String                @id @default(cuid())
+  sku               String                @unique
+  name              String
+  hierarchyNodeId   String
+  hierarchyNode     ProductHierarchyNode  @relation(fields: [hierarchyNodeId], references: [id])
+  manufacturerId    String
+  manufacturer      Manufacturer          @relation(fields: [manufacturerId], references: [id])
+  uom               String                // e.g. CASE, EACH, KG
+  hsnCode           String?               // GST HSN code
+  gstRatePercent    Decimal               @default(0) @db.Decimal(5, 2)
+  hasBatchTracking  Boolean               @default(true)
+  isActive          Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+
+  batches           Batch[]
+  orderLines        OrderLine[]
+  inventoryStocks   InventoryStock[]
+}
+
+// ---------------------------------------------------------------------------
+// Batch & Expiry (issued by Manufacturer) - the core unit FEFO operates on
+// ---------------------------------------------------------------------------
+
+model Batch {
+  id              String        @id @default(cuid())
+  batchNumber     String
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  manufacturerId  String
+  manufacturer    Manufacturer  @relation(fields: [manufacturerId], references: [id])
+  manufactureDate DateTime
+  expiryDate      DateTime
+  createdAt       DateTime      @default(now())
+
+  inventoryStocks   InventoryStock[]
+  allocations       Allocation[]
+  purchaseOrderLines PurchaseOrderLine[]
+
+  @@unique([productId, batchNumber, manufacturerId])
+  @@index([productId, expiryDate]) // critical index: FEFO queries filter by product, sort by expiry
+}
+
+// ---------------------------------------------------------------------------
+// Locations: Warehouse & Van
+// ---------------------------------------------------------------------------
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String?
+  createdAt DateTime @default(now())
+
+  inventoryStocks     InventoryStock[]
+  allocations         Allocation[]
+  picklists           Picklist[]
+  vanLoadsOrigin      VanLoad[]
+  transfersFrom       StockTransfer[] @relation("TransferFromWarehouse")
+  transfersTo         StockTransfer[] @relation("TransferToWarehouse")
+}
+
+model Van {
+  id           String   @id @default(cuid())
+  registration String   @unique
+  name         String
+  createdAt    DateTime @default(now())
+
+  vanLoads     VanLoad[]
+}
+
+// ---------------------------------------------------------------------------
+// Inventory (per Warehouse, per Batch => always FEFO-queryable)
+// ---------------------------------------------------------------------------
+
+model InventoryStock {
+  id                String     @id @default(cuid())
+  warehouseId       String
+  warehouse         Warehouse  @relation(fields: [warehouseId], references: [id])
+  productId         String
+  product           Product    @relation(fields: [productId], references: [id])
+  batchId           String
+  batch             Batch      @relation(fields: [batchId], references: [id])
+  quantityOnHand    Decimal    @default(0) @db.Decimal(14, 3)
+  quantityAllocated Decimal    @default(0) @db.Decimal(14, 3) // reserved, not yet picked
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([warehouseId, batchId])
+  @@index([warehouseId, productId])
+}
+
+// ---------------------------------------------------------------------------
+// Retailers (Order Management customers)
+// ---------------------------------------------------------------------------
+
+model Retailer {
+  id        String   @id @default(cuid())
+  name      String
+  gstin     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  orders    Order[]
+}
+
+// ---------------------------------------------------------------------------
+// Orders (Retailer <- Preseller or OMS Executive)
+// ---------------------------------------------------------------------------
+
+enum OrderSourceType {
+  PRESELLER
+  OMS_EXECUTIVE
+  VAN_DIRECT // van sale with no prior order (invoice generated directly)
+}
+
+enum OrderStatus {
+  DRAFT
+  ALLOCATED
+  PARTIALLY_ALLOCATED
+  PICKLIST_GENERATED
+  INVOICED
+  CANCELLED
+}
+
+model Order {
+  id            String          @id @default(cuid())
+  orderNumber   String          @unique
+  // Set by the creating client (mobile/web) at creation time, before the
+  // server has assigned an orderNumber. Lets an offline-created order be
+  // uploaded on sync without risk of duplication if the upload is retried.
+  clientOrderId String?         @unique
+  retailerId   String
+  retailer     Retailer        @relation(fields: [retailerId], references: [id])
+  sourceType   OrderSourceType
+  status       OrderStatus     @default(DRAFT)
+  createdById  String
+  createdBy    User            @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  orderDate    DateTime        @default(now())
+
+  lines        OrderLine[]
+  invoices     Invoice[]
+}
+
+model OrderLine {
+  id           String   @id @default(cuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  orderedQty   Decimal  @db.Decimal(14, 3)
+  allocatedQty Decimal  @default(0) @db.Decimal(14, 3)
+
+  allocations  Allocation[]
+  invoiceLines InvoiceLine[]
+}
+
+// Records exactly which batch(es) the Order Allocation Agent used to fulfil
+// a line, and how much from each -> this is what makes FEFO decisions auditable.
+model Allocation {
+  id            String    @id @default(cuid())
+  orderLineId   String
+  orderLine     OrderLine @relation(fields: [orderLineId], references: [id])
+  batchId       String
+  batch         Batch     @relation(fields: [batchId], references: [id])
+  warehouseId   String
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  allocatedQty  Decimal   @db.Decimal(14, 3)
+  reasonNote    String?   // e.g. "FEFO: earliest expiry 2026-10-01 among 3 available batches"
+  createdAt     DateTime  @default(now())
+
+  picklistLines PicklistLine[]
+
+  @@index([warehouseId, orderLineId])
+}
+
+// ---------------------------------------------------------------------------
+// Picklist (Warehouse Incharge)
+// ---------------------------------------------------------------------------
+
+enum PicklistStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Picklist {
+  id            String         @id @default(cuid())
+  picklistNumber String        @unique
+  warehouseId   String
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  assignedToId  String?
+  assignedTo    User?          @relation("PicklistAssignedTo", fields: [assignedToId], references: [id])
+  status        PicklistStatus @default(PENDING)
+  createdAt     DateTime       @default(now())
+
+  lines         PicklistLine[]
+}
+
+model PicklistLine {
+  id           String     @id @default(cuid())
+  picklistId   String
+  picklist     Picklist   @relation(fields: [picklistId], references: [id])
+  allocationId String     @unique
+  allocation   Allocation @relation(fields: [allocationId], references: [id])
+  quantity     Decimal    @db.Decimal(14, 3)
+  pickedQty    Decimal    @default(0) @db.Decimal(14, 3)
+}
+
+// ---------------------------------------------------------------------------
+// Invoice (India GST-compliant)
+// ---------------------------------------------------------------------------
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  orderId        String?       // nullable: Van direct sales have no prior order
+  order          Order?        @relation(fields: [orderId], references: [id])
+  invoiceDate    DateTime      @default(now())
+  placeOfSupply  String?
+  isIgst         Boolean       @default(false) // interstate vs intrastate (CGST+SGST) determination
+  subTotal       Decimal       @db.Decimal(14, 2)
+  totalTax       Decimal       @db.Decimal(14, 2)
+  totalAmount    Decimal       @db.Decimal(14, 2)
+
+  lines          InvoiceLine[]
+}
+
+model InvoiceLine {
+  id           String     @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice    @relation(fields: [invoiceId], references: [id])
+  orderLineId  String?
+  orderLine    OrderLine? @relation(fields: [orderLineId], references: [id])
+  batchId      String
+  quantity     Decimal    @db.Decimal(14, 3)
+  rate         Decimal    @db.Decimal(14, 2)
+  taxableValue Decimal    @db.Decimal(14, 2)
+  cgstAmount   Decimal    @default(0) @db.Decimal(14, 2)
+  sgstAmount   Decimal    @default(0) @db.Decimal(14, 2)
+  igstAmount   Decimal    @default(0) @db.Decimal(14, 2)
+}
+
+// ---------------------------------------------------------------------------
+// Purchase Management (from Manufacturers)
+// ---------------------------------------------------------------------------
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  poNumber       String              @unique
+  manufacturerId String
+  manufacturer   Manufacturer        @relation(fields: [manufacturerId], references: [id])
+  status         PurchaseOrderStatus @default(DRAFT)
+  createdAt      DateTime            @default(now())
+
+  lines          PurchaseOrderLine[]
+}
+
+model PurchaseOrderLine {
+  id            String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  productId     String
+  orderedQty    Decimal       @db.Decimal(14, 3)
+  receivedQty   Decimal       @default(0) @db.Decimal(14, 3)
+  batchId       String?       // populated once GRN/batch is issued by manufacturer
+  batch         Batch?        @relation(fields: [batchId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Stock Transfer (Warehouse <-> Warehouse, or Warehouse -> Van load)
+// ---------------------------------------------------------------------------
+
+enum StockTransferStatus {
+  DRAFT
+  IN_TRANSIT
+  COMPLETED
+}
+
+model StockTransfer {
+  id              String              @id @default(cuid())
+  fromWarehouseId String
+  fromWarehouse   Warehouse           @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouseId   String?
+  toWarehouse     Warehouse?          @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
+  status          StockTransferStatus @default(DRAFT)
+  createdAt       DateTime            @default(now())
+
+  lines           StockTransferLine[]
+}
+
+model StockTransferLine {
+  id              String        @id @default(cuid())
+  stockTransferId String
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id])
+  batchId         String
+  quantity        Decimal       @db.Decimal(14, 3)
+}
+
+// ---------------------------------------------------------------------------
+// Van Sales: load stock to van, sell directly (invoice, no order), unload unsold
+// ---------------------------------------------------------------------------
+
+enum VanLoadStatus {
+  LOADED
+  IN_FIELD
+  UNLOADED
+}
+
+model VanLoad {
+  id            String        @id @default(cuid())
+  vanId         String
+  van           Van           @relation(fields: [vanId], references: [id])
+  warehouseId   String
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  operatorId    String
+  operator      User          @relation("VanLoadOperator", fields: [operatorId], references: [id])
+  status        VanLoadStatus @default(LOADED)
+  loadDate      DateTime      @default(now())
+  unloadDate    DateTime?
+
+  lines         VanLoadLine[]
+}
+
+model VanLoadLine {
+  id           String  @id @default(cuid())
+  vanLoadId    String
+  vanLoad      VanLoad @relation(fields: [vanLoadId], references: [id])
+  batchId      String
+  loadedQty    Decimal @db.Decimal(14, 3)
+  soldQty      Decimal @default(0) @db.Decimal(14, 3)
+  unloadedQty  Decimal @default(0) @db.Decimal(14, 3)
+}
