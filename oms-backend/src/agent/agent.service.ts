@@ -17,7 +17,7 @@ a specific quantity in the conversation.`;
 @Injectable()
 export class AgentService {
   private readonly logger = new Logger(AgentService.name);
-  private readonly client: Anthropic;
+  private client: Anthropic | null = null;
   private readonly model: string;
 
   constructor(
@@ -25,8 +25,23 @@ export class AgentService {
     private readonly inventoryService: InventoryService,
     private readonly allocationService: AllocationService,
   ) {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     this.model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
+    // Deliberately NOT constructed here: the Anthropic SDK throws if
+    // ANTHROPIC_API_KEY is missing/blank, and this module is imported at app
+    // bootstrap — an unused feature (the agent chat) should never be able to
+    // crash the entire backend just because its optional API key isn't set.
+  }
+
+  private getClient(): Anthropic {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error(
+        'ANTHROPIC_API_KEY is not set. Add it to .env to use the agent chat endpoint.',
+      );
+    }
+    if (!this.client) {
+      this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    }
+    return this.client;
   }
 
   /**
@@ -44,7 +59,7 @@ export class AgentService {
     const MAX_TOOL_ROUNDS = 5;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const response = await this.client.messages.create({
+      const response = await this.getClient().messages.create({
         model: this.model,
         max_tokens: 1024,
         system: SYSTEM_PROMPT,

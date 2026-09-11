@@ -31,6 +31,9 @@ async function main() {
       uom: 'EACH',
       hsnCode: '0401',
       gstRatePercent: 5,
+      defaultUnitPrice: 58,
+      minOrderQty: 10,
+      maxOrderQty: 500,
     },
   });
 
@@ -39,7 +42,12 @@ async function main() {
   });
 
   const retailer = await prisma.retailer.create({
-    data: { name: 'Sri Ganesh Kirana Store', gstin: '29XYZAB5678C1Z2' },
+    data: {
+      name: 'Sri Ganesh Kirana Store',
+      gstin: '29XYZAB5678C1Z2',
+      creditLimitAmount: 50000,
+      creditUsedAmount: 12000,
+    },
   });
 
   const execUser = await prisma.user.create({

@@ -40,6 +40,7 @@ model User {
   ordersCreated   Order[]      @relation("OrderCreatedBy")
   picklists       Picklist[]   @relation("PicklistAssignedTo")
   vanLoads        VanLoad[]    @relation("VanLoadOperator")
+  resolvedTasks   AgentTask[]
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +82,9 @@ model Product {
   uom               String                // e.g. CASE, EACH, KG
   hsnCode           String?               // GST HSN code
   gstRatePercent    Decimal               @default(0) @db.Decimal(5, 2)
+  defaultUnitPrice  Decimal               @default(0) @db.Decimal(14, 2) // list price, used for credit-limit checks at order validation
+  minOrderQty       Decimal?              @db.Decimal(14, 3)
+  maxOrderQty       Decimal?              @db.Decimal(14, 3)
   hasBatchTracking  Boolean               @default(true)
   isActive          Boolean               @default(true)
   createdAt         DateTime              @default(now())
@@ -108,6 +112,8 @@ model Batch {
   inventoryStocks   InventoryStock[]
   allocations       Allocation[]
   purchaseOrderLines PurchaseOrderLine[]
+  stockTransferLines StockTransferLine[]
+  vanLoadLines      VanLoadLine[]
 
   @@unique([productId, batchNumber, manufacturerId])
   @@index([productId, expiryDate]) // critical index: FEFO queries filter by product, sort by expiry
@@ -166,11 +172,13 @@ model InventoryStock {
 // ---------------------------------------------------------------------------
 
 model Retailer {
-  id        String   @id @default(cuid())
-  name      String
-  gstin     String?
-  address   String?
-  createdAt DateTime @default(now())
+  id                 String   @id @default(cuid())
+  name               String
+  gstin              String?
+  address            String?
+  creditLimitAmount  Decimal  @default(0) @db.Decimal(14, 2)
+  creditUsedAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt          DateTime @default(now())
 
   orders    Order[]
 }
@@ -187,6 +195,7 @@ enum OrderSourceType {
 
 enum OrderStatus {
   DRAFT
+  VALIDATION_HOLD // one or more checks failed; an AgentTask is open for a human
   ALLOCATED
   PARTIALLY_ALLOCATED
   PICKLIST_GENERATED
@@ -373,6 +382,7 @@ model StockTransferLine {
   stockTransferId String
   stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id])
   batchId         String
+  batch           Batch         @relation(fields: [batchId], references: [id])
   quantity        Decimal       @db.Decimal(14, 3)
 }
 
@@ -406,7 +416,55 @@ model VanLoadLine {
   vanLoadId    String
   vanLoad      VanLoad @relation(fields: [vanLoadId], references: [id])
   batchId      String
+  batch        Batch   @relation(fields: [batchId], references: [id])
   loadedQty    Decimal @db.Decimal(14, 3)
   soldQty      Decimal @default(0) @db.Decimal(14, 3)
   unloadedQty  Decimal @default(0) @db.Decimal(14, 3)
+}
+
+// ---------------------------------------------------------------------------
+// Agentic plumbing: every agent decision that needs a human either passes a
+// threshold automatically or opens an AgentTask with a real due timestamp.
+// The UI computes its own countdown from dueAt — nothing about the timer is
+// faked or client-side-only, so it survives a page refresh or a different
+// device opening the same task.
+// ---------------------------------------------------------------------------
+
+enum AgentTaskType {
+  ORDER_VALIDATION
+  PO_HOLD
+  COST_APPROVAL
+  DELIVERY_DISPUTE
+  BREAKDOWN_WATCHDOG
+}
+
+enum AgentTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AgentTask {
+  id          String          @id @default(cuid())
+  taskType    AgentTaskType
+  entityType  String          // e.g. "Order", "PurchaseOrder" — kept as a string so new
+  entityId    String          // entity types can raise tasks without a schema migration
+  reasonNote  String
+  status      AgentTaskStatus @default(PENDING)
+  dueAt       DateTime        // when the reminder/auto-action fires — real timestamp, not a client-side countdown
+  createdAt   DateTime        @default(now())
+  resolvedAt  DateTime?
+  resolvedById String?
+  resolvedBy  User?           @relation(fields: [resolvedById], references: [id])
+}
+
+// Append-only audit trail: every agent decision (auto or human-assisted)
+// writes one row here, so the Agent Trace view is real history, not a demo.
+model AgentEvent {
+  id         String   @id @default(cuid())
+  agentName  String   // e.g. "Order Agent", "Demand Agent"
+  entityType String
+  entityId   String
+  message    String
+  createdAt  DateTime @default(now())
 }

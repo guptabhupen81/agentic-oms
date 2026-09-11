@@ -11,6 +11,7 @@ import { PicklistModule } from './picklist/picklist.module';
 import { VanModule } from './van/van.module';
 import { AuthModule } from './auth/auth.module';
 import { AgentModule } from './agent/agent.module';
+import { AgentTaskModule } from './agent-task/agent-task.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AgentModule } from './agent/agent.module';
     PicklistModule,
     VanModule,
     AgentModule,
+    AgentTaskModule,
   ],
 })
 export class AppModule {}
