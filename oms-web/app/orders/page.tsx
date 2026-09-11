@@ -2,10 +2,19 @@
 
 import { useState } from 'react';
 import { api, session, ApiError } from '../../lib/api';
-import type { AllocationResult, OrderResponse } from '../../lib/types';
+import type { AllocationResult, OrderResponse, ValidateOrderResult } from '../../lib/types';
 
 function newClientOrderId() {
-  return `web-${crypto.randomUUID()}`;
+  // crypto.randomUUID() only works in a "secure context" (HTTPS, or
+  // localhost) — this app is often accessed over plain http:// via a raw
+  // IP address during early testing, where that API is unavailable by
+  // browser spec. clientOrderId only needs to be unique per device, not
+  // cryptographically random, so a plain fallback is fine.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`;
+  }
+  const rand = () => Math.random().toString(16).slice(2);
+  return `web-${Date.now().toString(16)}-${rand()}-${rand()}`;
 }
 
 export default function OrdersPage() {
@@ -15,6 +24,7 @@ export default function OrdersPage() {
   const [warehouseId, setWarehouseId] = useState('');
 
   const [createdOrder, setCreatedOrder] = useState<OrderResponse | null>(null);
+  const [validation, setValidation] = useState<ValidateOrderResult | null>(null);
   const [allocation, setAllocation] = useState<AllocationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +45,21 @@ export default function OrdersPage() {
         lines: [{ productId, orderedQty: Number(orderedQty) }],
       });
       setCreatedOrder(order);
+      setValidation(null);
       setAllocation(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleValidate() {
+    if (!createdOrder) return;
+    setError(null);
+    setBusy(true);
+    try {
+      setValidation(await api.validateOrder(createdOrder.id, warehouseId));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -88,10 +112,43 @@ export default function OrdersPage() {
           <p className="mono">{createdOrder.orderNumber} — <span className="status-pill">{createdOrder.status}</span></p>
 
           <div className="field" style={{ marginTop: 16 }}>
-            <label>Warehouse ID to allocate from</label>
+            <label>Warehouse ID</label>
             <input value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} />
           </div>
-          <button onClick={handleAllocate} disabled={busy || !warehouseId}>Run allocation (FEFO)</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleValidate} disabled={busy || !warehouseId}>Validate order</button>
+            <button
+              className="secondary"
+              onClick={handleAllocate}
+              disabled={busy || !warehouseId || validation?.passed !== true}
+            >
+              Run allocation (FEFO)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {validation && (
+        <div className="card">
+          <h2>Validation — {validation.passed ? 'passed' : 'on hold'}</h2>
+          <table>
+            <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+            <tbody>
+              {validation.checks.map((c, i) => (
+                <tr key={i}>
+                  <td>{c.name}</td>
+                  <td><span className="status-pill" style={{ color: c.passed ? 'var(--success)' : 'var(--error)' }}>{c.passed ? 'Pass' : 'Fail'}</span></td>
+                  <td className="mono" style={{ fontSize: 12 }}>{c.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!validation.passed && (
+            <p className="error-text" style={{ marginTop: 12 }}>
+              Order is on hold. A task was opened in <a href="/approvals">Approvals</a> (due{' '}
+              {validation.dueAt ? new Date(validation.dueAt).toLocaleTimeString() : '—'}) — approve there to override, or reject to cancel.
+            </p>
+          )}
         </div>
       )}
 

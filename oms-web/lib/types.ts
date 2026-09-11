@@ -92,3 +92,37 @@ export interface AllocationResult {
   fullyAllocated: boolean;
   lines: AllocationResultLine[];
 }
+
+export interface ValidationCheckResult {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ValidateOrderResult {
+  orderId: string;
+  passed: boolean;
+  checks: ValidationCheckResult[];
+  agentTaskId?: string;
+  dueAt?: string;
+}
+
+export interface AgentTaskDto {
+  id: string;
+  taskType: string;
+  entityType: string;
+  entityId: string;
+  reasonNote: string;
+  status: string;
+  dueAt: string;
+  createdAt: string;
+}
+
+export interface AgentEventDto {
+  id: string;
+  agentName: string;
+  entityType: string;
+  entityId: string;
+  message: string;
+  createdAt: string;
+}

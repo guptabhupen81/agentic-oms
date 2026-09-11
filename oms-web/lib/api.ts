@@ -1,6 +1,8 @@
 'use client';
 
 import type {
+  AgentEventDto,
+  AgentTaskDto,
   AllocationResult,
   CompletePicklistResponse,
   InvoiceDto,
@@ -8,6 +10,7 @@ import type {
   OrderResponse,
   PicklistDto,
   ProductDto,
+  ValidateOrderResult,
   VanLoadDto,
 } from './types';
 
@@ -72,6 +75,22 @@ export const api = {
 
   runAllocation: (orderId: string, warehouseId: string) =>
     request<AllocationResult>('/allocation/run', { method: 'POST', body: JSON.stringify({ orderId, warehouseId }) }),
+
+  validateOrder: (orderId: string, warehouseId: string) =>
+    request<ValidateOrderResult>(`/orders/${orderId}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ warehouseId }),
+    }),
+
+  resolveValidation: (orderId: string, outcome: 'approved' | 'rejected') =>
+    request<{ orderId: string; status: string }>(`/orders/${orderId}/resolve-validation`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome }),
+    }),
+
+  listAgentTasks: () => request<AgentTaskDto[]>('/agent-tasks'),
+
+  listAgentEvents: () => request<AgentEventDto[]>('/agent-tasks/events'),
 
   generatePicklists: (orderIds: string[]) =>
     request<PicklistDto[]>('/picklists/generate', { method: 'POST', body: JSON.stringify({ orderIds }) }),

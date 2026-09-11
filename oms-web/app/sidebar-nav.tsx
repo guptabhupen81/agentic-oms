@@ -7,6 +7,8 @@ const LINKS = [
   { href: '/orders', label: 'Orders' },
   { href: '/picklists', label: 'Picklist' },
   { href: '/van', label: 'Van sales' },
+  { href: '/approvals', label: 'Approvals' },
+  { href: '/trace', label: 'Agent Trace' },
   { href: '/login', label: 'Log in' },
 ];
 

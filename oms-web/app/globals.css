@@ -62,6 +62,7 @@ a { color: inherit; }
 }
 
 .nav-link {
+  display: block;
   padding: 10px 20px;
   color: var(--text-muted);
   text-decoration: none;
