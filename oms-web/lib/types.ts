@@ -15,6 +15,86 @@ export interface ProductDto {
   uom: string;
   gstRatePercent: string;
   isActive: boolean;
+  hierarchyNodeId?: string;
+  manufacturerId?: string;
+  hsnCode?: string | null;
+  defaultUnitPrice?: string;
+  minOrderQty?: string | null;
+  maxOrderQty?: string | null;
+}
+
+export interface RetailerDto {
+  id: string;
+  name: string;
+  gstin: string | null;
+  address: string | null;
+  creditLimitAmount: string;
+  creditUsedAmount: string;
+  isActive: boolean;
+}
+
+export interface WarehouseDto {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+  isActive: boolean;
+}
+
+export interface VanDto {
+  id: string;
+  registration: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface ManufacturerDto {
+  id: string;
+  name: string;
+  gstin: string | null;
+}
+
+export interface HierarchyNodeDto {
+  id: string;
+  name: string;
+  level: number;
+  parentId: string | null;
+  children: HierarchyNodeDto[];
+}
+
+// --- Master create/update payloads (numbers, not decimal-strings — distinct
+// from the *Dto response types above, which mirror Prisma's Decimal-as-
+// string JSON serialization). ---
+
+export interface RetailerInput {
+  name: string;
+  gstin?: string;
+  address?: string;
+  creditLimitAmount?: number;
+}
+
+export interface WarehouseInput {
+  name: string;
+  code: string;
+  address?: string;
+}
+
+export interface VanInput {
+  registration: string;
+  name: string;
+}
+
+export interface ProductInput {
+  sku: string;
+  name: string;
+  hierarchyNodeId: string;
+  manufacturerId: string;
+  uom: string;
+  hsnCode?: string;
+  gstRatePercent?: number;
+  defaultUnitPrice?: number;
+  minOrderQty?: number;
+  maxOrderQty?: number;
 }
 
 export interface OrderResponse {

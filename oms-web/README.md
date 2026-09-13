@@ -47,6 +47,18 @@ backend isn't on the default port. Log in with the seeded demo account
    complete it (watch for the discrepancy warning if picked ≠ requested).
 3. **Van sales** — load a van from a warehouse batch, record a direct sale
    (generates a real GST invoice), unload at day's end.
+4. **Approvals / Agent Trace** — real, not mock: click **Validate order** on
+   the Orders page first. If it fails a check (try ordering more than the
+   seeded product's `maxOrderQty` of 500, or exceeding stock), a real task
+   appears in **Approvals** with a genuine countdown computed from the
+   server's `dueAt` — refresh the page and the timer keeps counting from the
+   true remaining time, because it's not client-side state. Approve/reject
+   it there, then check **Agent Trace** for the event log this generated.
+5. **Masters** (sidebar) — create/edit/deactivate Retailers, Products, Vans,
+   and Warehouses directly; Manufacturers and Product Hierarchy are
+   view-only lists, matching the spec exactly. Creating a retailer or
+   product here means you no longer need Prisma Studio to get real IDs for
+   the Orders page — copy them straight from these tables.
 
 ## What's here vs. not yet built
 

@@ -5,13 +5,22 @@ import type {
   AgentTaskDto,
   AllocationResult,
   CompletePicklistResponse,
+  HierarchyNodeDto,
   InvoiceDto,
   LoginResponse,
+  ManufacturerDto,
   OrderResponse,
   PicklistDto,
   ProductDto,
+  ProductInput,
+  RetailerDto,
+  RetailerInput,
   ValidateOrderResult,
+  VanDto,
+  VanInput,
   VanLoadDto,
+  WarehouseDto,
+  WarehouseInput,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
@@ -91,6 +100,43 @@ export const api = {
   listAgentTasks: () => request<AgentTaskDto[]>('/agent-tasks'),
 
   listAgentEvents: () => request<AgentEventDto[]>('/agent-tasks/events'),
+
+  // --- Masters ---
+
+  listRetailers: (activeOnly = false) => request<RetailerDto[]>(`/retailers?activeOnly=${activeOnly}`),
+  createRetailer: (body: RetailerInput) =>
+    request<RetailerDto>('/retailers', { method: 'POST', body: JSON.stringify(body) }),
+  updateRetailer: (id: string, body: Partial<RetailerInput>) =>
+    request<RetailerDto>(`/retailers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleRetailerActive: (id: string, isActive: boolean) =>
+    request<RetailerDto>(`/retailers/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+
+  listWarehouses: (activeOnly = false) => request<WarehouseDto[]>(`/warehouses?activeOnly=${activeOnly}`),
+  createWarehouse: (body: WarehouseInput) =>
+    request<WarehouseDto>('/warehouses', { method: 'POST', body: JSON.stringify(body) }),
+  updateWarehouse: (id: string, body: Partial<WarehouseInput>) =>
+    request<WarehouseDto>(`/warehouses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleWarehouseActive: (id: string, isActive: boolean) =>
+    request<WarehouseDto>(`/warehouses/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+
+  listVans: (activeOnly = false) => request<VanDto[]>(`/vans?activeOnly=${activeOnly}`),
+  createVan: (body: VanInput) => request<VanDto>('/vans', { method: 'POST', body: JSON.stringify(body) }),
+  updateVan: (id: string, body: Partial<VanInput>) =>
+    request<VanDto>(`/vans/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleVanActive: (id: string, isActive: boolean) =>
+    request<VanDto>(`/vans/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+
+  listProductsForMaster: (activeOnly = false) => request<ProductDto[]>(`/products?activeOnly=${activeOnly}`),
+  createProduct: (body: ProductInput) =>
+    request<ProductDto>('/products', { method: 'POST', body: JSON.stringify(body) }),
+  updateProduct: (id: string, body: Partial<ProductInput>) =>
+    request<ProductDto>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleProductActive: (id: string, isActive: boolean) =>
+    request<ProductDto>(`/products/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+
+  listManufacturers: () => request<ManufacturerDto[]>('/manufacturers'),
+
+  getHierarchyTree: () => request<HierarchyNodeDto[]>('/products/hierarchy'),
 
   generatePicklists: (orderIds: string[]) =>
     request<PicklistDto[]>('/picklists/generate', { method: 'POST', body: JSON.stringify({ orderIds }) }),
