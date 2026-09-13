@@ -128,6 +128,7 @@ model Warehouse {
   name      String
   code      String   @unique
   address   String?
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   inventoryStocks     InventoryStock[]
@@ -142,6 +143,7 @@ model Van {
   id           String   @id @default(cuid())
   registration String   @unique
   name         String
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
   vanLoads     VanLoad[]
@@ -178,6 +180,7 @@ model Retailer {
   address            String?
   creditLimitAmount  Decimal  @default(0) @db.Decimal(14, 2)
   creditUsedAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
 
   orders    Order[]

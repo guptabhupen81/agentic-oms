@@ -12,12 +12,14 @@ import { VanModule } from './van/van.module';
 import { AuthModule } from './auth/auth.module';
 import { AgentModule } from './agent/agent.module';
 import { AgentTaskModule } from './agent-task/agent-task.module';
+import { MastersModule } from './masters/masters.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    MastersModule,
     ProductModule,
     InventoryModule,
     OrderModule,

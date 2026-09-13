@@ -130,6 +130,47 @@ costs nothing — fits the low-recurring-cost requirement. `MAX_TOOL_ROUNDS` in
 `agent.service.ts` caps how many tool-call rounds one chat turn can take, so
 a stuck loop can't run away with API spend.
 
+## Masters
+
+Full manage (create, edit, activate/deactivate) for the four masters that
+change often: **Retailer, Product, Van, Warehouse**. `Manufacturer` and the
+`Product Hierarchy` tree are intentionally **view-only** endpoints — no
+POST/PATCH — since those are populated through Purchase onboarding and
+initial setup, not day-to-day management, per the actual requirement.
+
+- `GET/POST/PATCH /retailers`, `POST /retailers/:id/toggle-active`
+- `GET/POST/PATCH /warehouses`, `POST /warehouses/:id/toggle-active`
+- `GET/POST/PATCH /vans`, `POST /vans/:id/toggle-active`
+- `GET/POST/PATCH /products` (extended — was read-only before), `POST /products/:id/toggle-active`
+- `GET /manufacturers` — view-only
+- `GET /products/hierarchy` — view-only (already existed)
+
+None of these hard-delete — deactivating keeps history intact for anything
+that already references the record (an old order still points at a real
+retailer even after it's deactivated).
+
+## Agent Tasks — the real approval/reminder backbone
+
+`AgentTask` and `AgentEvent` are the backbone behind an Approvals inbox and
+Agent Trace view: any domain service can open a task with a **real `dueAt`
+timestamp** (not a client-side fake countdown) when something needs a human,
+and every agent decision — auto or human-assisted — writes an `AgentEvent`
+row. Currently wired for real:
+
+- **Order validation** (`POST /orders/:id/validate`) — runs the 3 checks
+  (stock availability, credit limit, min/max order qty) against real data.
+  Any failure sets the order to `VALIDATION_HOLD` and opens a real
+  `ORDER_VALIDATION` task with `dueAt` = now + 30 minutes.
+- **Resolution** (`POST /orders/:id/resolve-validation`) — approve overrides
+  the failed check and returns the order to `DRAFT` (ready to allocate);
+  reject cancels it.
+- `GET /agent-tasks` — every pending task, any type (Approvals inbox).
+- `GET /agent-tasks/events` — recent agent decisions (Agent Trace).
+
+Other task types (`PO_HOLD`, `COST_APPROVAL`, `DELIVERY_DISPUTE`,
+`BREAKDOWN_WATCHDOG`) exist in the schema as the next phases of this same
+pattern, but nothing creates them yet — see "Not yet built" below.
+
 ## Module map
 
 | Module | Responsibility |
@@ -144,9 +185,19 @@ a stuck loop can't run away with API spend.
 | `van` | Van load (warehouse → van), direct sale (invoice, no order), end-of-day unload/reconciliation |
 | `auth` | JWT login, global auth guard (`@Public()` to exempt), `@Roles()` guard for role restriction |
 | `agent` | LLM tool-calling agent (Claude) — Purchase recommendations, stock lookup, allocation explanation, in natural language |
+| `agent-task` | Generic approval-queue + audit-trail (`AgentTask`, `AgentEvent`) — backbone for Approvals inbox and Agent Trace |
+| `masters` | Retailer, Warehouse, Van CRUD + view-only Manufacturer — the four/two master-data split |
 
 ## Not yet built (next increments)
 
+- Demand Agent: manufacturer cadence, 4-week recalibration, truck-capacity
+  top-up, and the `PO_HOLD` task type with real 30-min auto-send-to-SAP
+- Fulfilment Agent: route planning (biggest→smallest truck), GPS geofence
+  delivery confirmation, the `COST_APPROVAL` and `DELIVERY_DISPUTE` task types
+- Fleet Agent: vehicles, trip logs, the `BREAKDOWN_WATCHDOG` task type
+- Forecasting: quarter growth/weight/factor model and its approval flow
+- A real scheduler (e.g. `@nestjs/schedule`) to auto-resolve a task when
+  `dueAt` passes with no human action, instead of it just sitting `PENDING`
 - Role restrictions on individual endpoints (infrastructure is in place via `@Roles()`, just not applied per-route yet)
 - Mobile sync contract doc (what "download masters" / "upload transactions"
   actually looks like as request/response shapes)

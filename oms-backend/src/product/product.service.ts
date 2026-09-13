@@ -39,4 +39,34 @@ export class ProductService {
       where: { createdAt: { gte: since } },
     });
   }
+
+  async findById(id: string) {
+    return this.prisma.product.findUnique({
+      where: { id },
+      include: { hierarchyNode: true, manufacturer: true },
+    });
+  }
+
+  async create(data: {
+    sku: string;
+    name: string;
+    hierarchyNodeId: string;
+    manufacturerId: string;
+    uom: string;
+    hsnCode?: string;
+    gstRatePercent?: number;
+    defaultUnitPrice?: number;
+    minOrderQty?: number;
+    maxOrderQty?: number;
+  }) {
+    return this.prisma.product.create({ data });
+  }
+
+  async update(id: string, data: Partial<Parameters<ProductService['create']>[0]>) {
+    return this.prisma.product.update({ where: { id }, data });
+  }
+
+  async setActive(id: string, isActive: boolean) {
+    return this.prisma.product.update({ where: { id }, data: { isActive } });
+  }
 }
