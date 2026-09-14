@@ -13,8 +13,8 @@ export class ProductController {
   /** activeOnly=false shows inactive products too — used by the Product master
    * management screen; the default (active-only) is what mobile/order-entry use. */
   @Get()
-  list(@Query('activeOnly') activeOnly?: string) {
-    return this.productService.listProducts(activeOnly !== 'false');
+  list(@Query('activeOnly') activeOnly?: string, @Query('search') search?: string) {
+    return this.productService.listProducts(activeOnly !== 'false', search);
   }
 
   @Get('sync')

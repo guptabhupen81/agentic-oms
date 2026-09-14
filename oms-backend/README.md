@@ -130,6 +130,42 @@ costs nothing — fits the low-recurring-cost requirement. `MAX_TOOL_ROUNDS` in
 `agent.service.ts` caps how many tool-call rounds one chat turn can take, so
 a stuck loop can't run away with API spend.
 
+## Order Management enhancements
+
+- **Multiple products per order** — was already supported by the schema
+  (`lines: []`), but is now the primary way the web app builds an order.
+- **Per-line discount** (`OrderLine.discountPercent`) and **overall bill
+  discount** (`Order.overallDiscountPercent`), both applied before tax. The
+  overall discount scales each line's already-discounted value
+  proportionally, so each product's own GST rate still applies correctly to
+  its own reduced share — see `OrderService.calculateOrderTotals()`.
+- **Free items** (`OrderLine.isFreeItem`) — billed at zero regardless of
+  discount, but still allocated, picked, and shipped normally.
+- **Order/invoice value preview** — `GET /orders/:id/value` runs the exact
+  same calculation the credit-limit check and the real invoice both use, so
+  the number a user previews never diverges from what they're actually
+  billed. `GET /orders` (the list) includes each order's `estimatedValue` too.
+- **Product search** — `GET /products?search=<code-or-name>` matches SKU or
+  name, case-insensitive, capped at 20 results (type-ahead use case).
+- **Stock-in-hand summary** — `GET /inventory/warehouse/:id/summary` returns
+  one row per product with free quantity only (batches collapsed) — what the
+  Orders page shows next to each line while it's being built.
+
+## Forecasting & Demand
+
+- `POST /forecast-factors`, `GET /forecast-factors` — named factors (promotion,
+  product launch, competitor, special event), each scoped to either a whole
+  category or one product, with a date window and an uplift %.
+- `POST /forecasts` — runs a forecast: base qty (user-entered, per product) →
+  scaled by quarter growth % → scaled again by every currently-active
+  matching factor. Every line records which factors applied and by how much,
+  in plain text (`appliedFactors`), so nothing is a black-box number.
+- `GET /forecasts`, `GET /forecasts/:id` — history and detail.
+- Purchase Orders now open a real `PO_HOLD` task (30-min `dueAt`) the moment
+  they're drafted — `POST /purchase/orders/:id/resolve-hold` approves
+  (simulates sending to SAP) or rejects (cancels). Same pattern as Order
+  Validation, reused rather than reinvented.
+
 ## Masters
 
 Full manage (create, edit, activate/deactivate) for the four masters that
@@ -187,6 +223,7 @@ pattern, but nothing creates them yet — see "Not yet built" below.
 | `agent` | LLM tool-calling agent (Claude) — Purchase recommendations, stock lookup, allocation explanation, in natural language |
 | `agent-task` | Generic approval-queue + audit-trail (`AgentTask`, `AgentEvent`) — backbone for Approvals inbox and Agent Trace |
 | `masters` | Retailer, Warehouse, Van CRUD + view-only Manufacturer — the four/two master-data split |
+| `forecast` | Named factors + forecast runs with per-line explainability |
 
 ## Not yet built (next increments)
 

@@ -11,9 +11,21 @@ export class OrderController {
     return this.orderService.createOrder(dto);
   }
 
+  @Get()
+  listRecent(@Query('limit') limit?: string) {
+    return this.orderService.listRecent(limit ? Number(limit) : undefined);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.orderService.findById(id);
+  }
+
+  /** Order/invoice value preview — same calculation the credit-limit check
+   * and the eventual real invoice both use. */
+  @Get(':id/value')
+  getValue(@Param('id') id: string) {
+    return this.orderService.computeOrderValue(id);
   }
 
   @Get('sync/for-user')

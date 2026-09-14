@@ -92,6 +92,7 @@ model Product {
   batches           Batch[]
   orderLines        OrderLine[]
   inventoryStocks   InventoryStock[]
+  forecastLines     ForecastLine[]
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +176,7 @@ model InventoryStock {
 
 model Retailer {
   id                 String   @id @default(cuid())
+  code               String   @unique // manually entered by the user, e.g. "RET-001"
   name               String
   gstin              String?
   address            String?
@@ -217,6 +219,10 @@ model Order {
   retailer     Retailer        @relation(fields: [retailerId], references: [id])
   sourceType   OrderSourceType
   status       OrderStatus     @default(DRAFT)
+  // Applied to the whole bill, AFTER per-line discounts, BEFORE tax —
+  // scales every line's already-discounted value proportionally so each
+  // product's own GST rate still applies correctly to its own reduced share.
+  overallDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
   createdById  String
   createdBy    User            @relation("OrderCreatedBy", fields: [createdById], references: [id])
   orderDate    DateTime        @default(now())
@@ -226,13 +232,15 @@ model Order {
 }
 
 model OrderLine {
-  id           String   @id @default(cuid())
-  orderId      String
-  order        Order    @relation(fields: [orderId], references: [id])
-  productId    String
-  product      Product  @relation(fields: [productId], references: [id])
-  orderedQty   Decimal  @db.Decimal(14, 3)
-  allocatedQty Decimal  @default(0) @db.Decimal(14, 3)
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id])
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  orderedQty      Decimal  @db.Decimal(14, 3)
+  allocatedQty    Decimal  @default(0) @db.Decimal(14, 3)
+  discountPercent Decimal  @default(0) @db.Decimal(5, 2) // per-line discount, before tax
+  isFreeItem      Boolean  @default(false) // billed at zero regardless of discountPercent — still allocated/picked/shipped normally
 
   allocations  Allocation[]
   invoiceLines InvoiceLine[]
@@ -470,4 +478,44 @@ model AgentEvent {
   entityId   String
   message    String
   createdAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Forecasting — quarter base + growth + named factors (promotions, launches,
+// competitor moves, events), each attributable per forecast line so a
+// reviewer sees WHY a SKU moved, not just a final number.
+// ---------------------------------------------------------------------------
+
+model ForecastFactor {
+  id              String    @id @default(cuid())
+  name            String
+  factorType      String    // "PROMOTION" | "PRODUCT_LAUNCH" | "COMPETITOR" | "SPECIAL_EVENT" — free text, not an enum, so new types don't need a migration
+  hierarchyNodeId String?   // applies to every product under this category node...
+  productId       String?   // ...or to one specific product. At least one should be set.
+  upliftPercent   Decimal   @db.Decimal(6, 2)
+  startDate       DateTime
+  endDate         DateTime
+  notes           String?
+  createdAt       DateTime  @default(now())
+}
+
+model Forecast {
+  id           String         @id @default(cuid())
+  quarterLabel String         // e.g. "Q3 FY27"
+  growthPercent Decimal       @db.Decimal(6, 2)
+  createdAt    DateTime       @default(now())
+
+  lines        ForecastLine[]
+}
+
+model ForecastLine {
+  id                String   @id @default(cuid())
+  forecastId        String
+  forecast          Forecast @relation(fields: [forecastId], references: [id])
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id])
+  baseQty           Decimal  @db.Decimal(14, 3) // user-entered: last complete quarter's actual/base quantity
+  growthAdjustedQty Decimal  @db.Decimal(14, 3) // baseQty scaled by the forecast's growthPercent
+  finalQty          Decimal  @db.Decimal(14, 3) // growthAdjustedQty further scaled by matching active factors
+  appliedFactors    String   // human-readable summary, e.g. "Diwali promotion +22%" — kept denormalized so the explainability text survives even if a factor is edited later
 }

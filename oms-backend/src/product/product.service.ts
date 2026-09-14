@@ -26,10 +26,21 @@ export class ProductService {
     return roots;
   }
 
-  async listProducts(activeOnly = true) {
+  async listProducts(activeOnly = true, search?: string) {
     return this.prisma.product.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
+      where: {
+        ...(activeOnly ? { isActive: true } : {}),
+        ...(search
+          ? {
+              OR: [
+                { sku: { contains: search, mode: 'insensitive' } },
+                { name: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       include: { hierarchyNode: true, manufacturer: true },
+      ...(search ? { take: 20 } : {}),
     });
   }
 

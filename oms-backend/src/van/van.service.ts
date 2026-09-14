@@ -166,4 +166,13 @@ export class VanService {
       include: { lines: { include: { batch: true } } },
     });
   }
+
+  /** Recent van loads — powers the transaction list on the Van page. */
+  async listRecent(limit = 50) {
+    return this.prisma.vanLoad.findMany({
+      orderBy: { loadDate: 'desc' },
+      take: limit,
+      include: { van: true, warehouse: true },
+    });
+  }
 }

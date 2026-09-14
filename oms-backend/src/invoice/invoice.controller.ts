@@ -12,14 +12,14 @@ export class InvoiceController {
       orderId: string;
       isIgst: boolean;
       placeOfSupply: string;
-      priceList: { productId: string; rate: number }[];
+      rateOverrides?: { productId: string; rate: number }[];
     },
   ) {
     return this.invoiceService.generateInvoiceForOrder(
       body.orderId,
       body.isIgst,
       body.placeOfSupply,
-      body.priceList,
+      body.rateOverrides ?? [],
     );
   }
 

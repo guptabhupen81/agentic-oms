@@ -5,6 +5,16 @@ import { InventoryService } from './inventory.service';
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
+  @Get()
+  getAllStock() {
+    return this.inventoryService.getAllStock();
+  }
+
+  @Get('warehouse/:warehouseId/summary')
+  getWarehouseStockSummary(@Param('warehouseId') warehouseId: string) {
+    return this.inventoryService.getWarehouseStockSummary(warehouseId);
+  }
+
   @Get('warehouse/:warehouseId')
   getWarehouseStock(@Param('warehouseId') warehouseId: string) {
     return this.inventoryService.getWarehouseStock(warehouseId);

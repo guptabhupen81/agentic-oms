@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { VanService } from './van.service';
 
 @Controller('van-loads')
@@ -16,6 +16,11 @@ export class VanController {
     },
   ) {
     return this.vanService.loadVan(body.vanId, body.warehouseId, body.operatorId, body.lines);
+  }
+
+  @Get()
+  listRecent(@Query('limit') limit?: string) {
+    return this.vanService.listRecent(limit ? Number(limit) : undefined);
   }
 
   @Get(':id')

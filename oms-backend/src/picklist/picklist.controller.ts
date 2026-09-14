@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { PicklistService } from './picklist.service';
 
 @Controller('picklists')
@@ -8,6 +8,11 @@ export class PicklistController {
   @Post('generate')
   generate(@Body() body: { orderIds: string[] }) {
     return this.picklistService.generatePicklists(body.orderIds);
+  }
+
+  @Get()
+  listRecent(@Query('limit') limit?: string) {
+    return this.picklistService.listRecent(limit ? Number(limit) : undefined);
   }
 
   @Get(':id')

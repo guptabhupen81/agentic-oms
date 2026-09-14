@@ -19,6 +19,28 @@ export interface ValidateOrderResult {
   dueAt?: string;
 }
 
+export interface OrderValueLine {
+  orderLineId: string;
+  productId: string;
+  productName: string;
+  orderedQty: string;
+  unitPrice: string;
+  discountPercent: string;
+  isFreeItem: boolean;
+  taxableValue: string;
+  taxAmount: string;
+  lineTotal: string;
+}
+
+export interface OrderValueResult {
+  orderId: string;
+  overallDiscountPercent: string;
+  lines: OrderValueLine[];
+  subTotal: string;
+  totalTax: string;
+  totalValue: string;
+}
+
 const VALIDATION_HOLD_MINUTES = 30;
 
 @Injectable()
@@ -51,10 +73,13 @@ export class OrderService {
         createdById: dto.createdById,
         sourceType: dto.sourceType,
         status: OrderStatus.DRAFT,
+        overallDiscountPercent: dto.overallDiscountPercent ?? 0,
         lines: {
           create: dto.lines.map((l) => ({
             productId: l.productId,
             orderedQty: l.orderedQty,
+            discountPercent: l.discountPercent ?? 0,
+            isFreeItem: l.isFreeItem ?? false,
           })),
         },
       },
@@ -69,12 +94,101 @@ export class OrderService {
     });
   }
 
+  /** Recent orders across all users — powers the transaction list on the
+   * Orders page. Includes each order's computed value so the list itself is
+   * useful without an extra round-trip per row. */
+  async listRecent(limit = 50) {
+    const orders = await this.prisma.order.findMany({
+      orderBy: { orderDate: 'desc' },
+      take: limit,
+      include: { retailer: true, lines: { include: { product: true } } },
+    });
+
+    return orders.map((order: any) => ({
+      ...order,
+      estimatedValue: this.calculateOrderTotals(order).totalValue,
+    }));
+  }
+
   /** Delta sync for mobile: orders relevant to a user updated since last sync. */
   async listForUserSince(userId: string, since: Date) {
     return this.prisma.order.findMany({
       where: { createdById: userId, orderDate: { gte: since } },
       include: { lines: true },
     });
+  }
+
+  /**
+   * Order/invoice value preview: per-line discount applied first, then the
+   * bill-level overall discount scales each already-discounted line
+   * proportionally (so each product's own GST rate still applies correctly
+   * to its own reduced share), then tax is computed on that final taxable
+   * value. Free items are zeroed out entirely regardless of discountPercent.
+   * This is the SAME calculation InvoiceService uses when the real invoice
+   * is generated later, so the preview a user sees here never diverges from
+   * what they're actually billed.
+   */
+  async computeOrderValue(orderId: string): Promise<OrderValueResult> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { lines: { include: { product: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const totals = this.calculateOrderTotals(order);
+    return { orderId, ...totals };
+  }
+
+  /** Shared by computeOrderValue() and listRecent() so the number a user
+   * previews and the number shown in the order list are always identical. */
+  private calculateOrderTotals(order: any): Omit<OrderValueResult, 'orderId'> {
+    const overallDiscountPercent = new Decimal(order.overallDiscountPercent?.toString() ?? '0');
+    const overallScale = new Decimal(1).minus(overallDiscountPercent.div(100));
+
+    const lines: OrderValueLine[] = [];
+    let subTotal = new Decimal(0);
+    let totalTax = new Decimal(0);
+
+    for (const line of order.lines) {
+      const qty = new Decimal(line.orderedQty.toString());
+      const unitPrice = new Decimal(line.product.defaultUnitPrice.toString());
+      const discountPercent = new Decimal(line.discountPercent?.toString() ?? '0');
+      const gstRate = new Decimal(line.product.gstRatePercent.toString()).div(100);
+
+      let taxableValue = new Decimal(0);
+      let taxAmount = new Decimal(0);
+
+      if (!line.isFreeItem) {
+        const gross = qty.mul(unitPrice);
+        const afterLineDiscount = gross.mul(new Decimal(1).minus(discountPercent.div(100)));
+        taxableValue = afterLineDiscount.mul(overallScale);
+        taxAmount = taxableValue.mul(gstRate);
+      }
+
+      subTotal = subTotal.plus(taxableValue);
+      totalTax = totalTax.plus(taxAmount);
+
+      lines.push({
+        orderLineId: line.id,
+        productId: line.productId,
+        productName: line.product.name,
+        orderedQty: qty.toFixed(3),
+        unitPrice: unitPrice.toFixed(2),
+        discountPercent: discountPercent.toFixed(2),
+        isFreeItem: line.isFreeItem,
+        taxableValue: taxableValue.toFixed(2),
+        taxAmount: taxAmount.toFixed(2),
+        lineTotal: taxableValue.plus(taxAmount).toFixed(2),
+      });
+    }
+
+    return {
+      overallDiscountPercent: overallDiscountPercent.toFixed(2),
+      lines,
+      subTotal: subTotal.toFixed(2),
+      totalTax: totalTax.toFixed(2),
+      totalValue: subTotal.plus(totalTax).toFixed(2),
+    };
   }
 
   /**
@@ -116,12 +230,10 @@ export class OrderService {
     }
     if (stockOk) checks.push({ name: 'Stock availability', passed: true, detail: 'All lines covered by free stock' });
 
-    // Check 2: credit limit — order value against retailer's remaining credit.
-    const orderValue = order.lines.reduce(
-      (sum: Decimal, line: any) =>
-        sum.plus(new Decimal(line.orderedQty.toString()).mul(line.product.defaultUnitPrice.toString())),
-      new Decimal(0),
-    );
+    // Check 2: credit limit — uses the SAME discount-aware order value as the
+    // preview/invoice, not a raw qty*price figure, so discounts and free
+    // items correctly reduce how much credit an order actually consumes.
+    const orderValue = new Decimal(this.calculateOrderTotals(order).totalValue);
     const creditRemaining = new Decimal(order.retailer.creditLimitAmount.toString()).minus(
       order.retailer.creditUsedAmount.toString(),
     );

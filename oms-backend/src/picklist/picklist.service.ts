@@ -145,6 +145,15 @@ export class PicklistService {
     });
   }
 
+  /** Recent picklists — powers the transaction list on the Picklist page. */
+  async listRecent(limit = 50) {
+    return this.prisma.picklist.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { warehouse: true },
+    });
+  }
+
   private async generatePicklistNumber(): Promise<string> {
     const count = await this.prisma.picklist.count();
     const year = new Date().getFullYear();

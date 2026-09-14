@@ -43,6 +43,7 @@ async function main() {
 
   const retailer = await prisma.retailer.create({
     data: {
+      code: 'RET-0001',
       name: 'Sri Ganesh Kirana Store',
       gstin: '29XYZAB5678C1Z2',
       creditLimitAmount: 50000,

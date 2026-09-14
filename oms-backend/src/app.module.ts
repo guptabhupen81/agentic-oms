@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { AgentModule } from './agent/agent.module';
 import { AgentTaskModule } from './agent-task/agent-task.module';
 import { MastersModule } from './masters/masters.module';
+import { ForecastModule } from './forecast/forecast.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { MastersModule } from './masters/masters.module';
     VanModule,
     AgentModule,
     AgentTaskModule,
+    ForecastModule,
   ],
 })
 export class AppModule {}

@@ -15,6 +15,45 @@ export class InventoryService {
     });
   }
 
+  /** Inventory Agent visibility: stock across EVERY warehouse in one call —
+   * this is the "where is everything, right now" view, not scoped to a
+   * single location. */
+  async getAllStock() {
+    return this.prisma.inventoryStock.findMany({
+      include: { product: true, batch: true, warehouse: true },
+      orderBy: [{ warehouse: { name: 'asc' } }, { productId: 'asc' }, { batch: { expiryDate: 'asc' } }],
+    });
+  }
+
+  /** Stock-in-hand summary: one row per product at a warehouse, batches
+   * collapsed into a single free-quantity figure. This is what the Orders
+   * page shows next to each line while a user is adding products — they
+   * need "how much is available," not a batch-by-batch breakdown. */
+  async getWarehouseStockSummary(warehouseId: string) {
+    const rows = await this.prisma.inventoryStock.groupBy({
+      by: ['productId'],
+      where: { warehouseId },
+      _sum: { quantityOnHand: true, quantityAllocated: true },
+    });
+
+    const productIds = rows.map((r: any) => r.productId);
+    const products = await this.prisma.product.findMany({ where: { id: { in: productIds } } });
+    const productById: Record<string, any> = {};
+    for (const p of products as any[]) {
+      productById[p.id] = p;
+    }
+
+    return rows.map((r: any) => {
+      const onHand = new Decimal(r._sum.quantityOnHand?.toString() ?? '0');
+      const allocated = new Decimal(r._sum.quantityAllocated?.toString() ?? '0');
+      return {
+        productId: r.productId,
+        sku: productById[r.productId]?.sku ?? '',
+        stockInHand: onHand.minus(allocated).toFixed(2),
+      };
+    });
+  }
+
   /**
    * Manual stock adjustment (damage, physical count correction, etc).
    * delta may be positive or negative; negative adjustments are rejected if

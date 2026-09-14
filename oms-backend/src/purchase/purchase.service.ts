@@ -1,10 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AgentTaskService } from '../agent-task/agent-task.service';
+import { AgentTaskStatus, AgentTaskType, PurchaseOrderStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 
 interface ReplenishmentRecommendation {
   productId: string;
   sku: string;
+  manufacturerId: string;
   currentStock: string;
   averageDailySales: string;
   daysOfCoverRemaining: string;
@@ -12,9 +15,14 @@ interface ReplenishmentRecommendation {
   rationale: string;
 }
 
+const PO_HOLD_MINUTES = 30;
+
 @Injectable()
 export class PurchaseService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly agentTaskService: AgentTaskService,
+  ) {}
 
   /**
    * Purchase Agent (recommendation piece): flags products whose current
@@ -67,6 +75,7 @@ export class PurchaseService {
         recommendations.push({
           productId: product.id,
           sku: product.sku,
+          manufacturerId: product.manufacturerId,
           currentStock: currentStock.toFixed(2),
           averageDailySales: avgDailySales.toFixed(2),
           daysOfCoverRemaining: daysOfCover.toFixed(1),
@@ -79,18 +88,66 @@ export class PurchaseService {
     return recommendations;
   }
 
-  async createPurchaseOrder(
-    manufacturerId: string,
-    lines: { productId: string; orderedQty: number }[],
-  ) {
+  /**
+   * Drafts a PO and immediately opens a real PO_HOLD task, dueAt = now + 30
+   * minutes — mirrors the Order Validation pattern exactly. Approving
+   * simulates the auto-send-to-SAP step (status -> SENT); rejecting cancels
+   * the PO outright.
+   */
+  async createPurchaseOrder(manufacturerId: string, lines: { productId: string; orderedQty: number }[]) {
     const poNumber = await this.generatePoNumber();
-    return this.prisma.purchaseOrder.create({
+    const po = await this.prisma.purchaseOrder.create({
       data: {
         poNumber,
         manufacturerId,
         lines: { create: lines.map((l) => ({ productId: l.productId, orderedQty: l.orderedQty })) },
       },
-      include: { lines: true },
+      include: { lines: { include: { product: true } }, manufacturer: true },
+    });
+
+    const dueAt = new Date(Date.now() + PO_HOLD_MINUTES * 60 * 1000);
+    const lineSummary = po.lines.map((l: any) => `${l.product.name} x${l.orderedQty}`).join(', ');
+
+    await this.agentTaskService.create({
+      taskType: AgentTaskType.PO_HOLD,
+      entityType: 'PurchaseOrder',
+      entityId: po.id,
+      reasonNote: `${po.poNumber} for ${po.manufacturer.name}: ${lineSummary}`,
+      dueAt,
+    });
+
+    return { ...po, holdDueAt: dueAt.toISOString() };
+  }
+
+  /** Resolves the PO_HOLD task — approve simulates sending to SAP, reject cancels. */
+  async resolvePOHold(purchaseOrderId: string, outcome: 'approved' | 'rejected', userId: string) {
+    const task = await this.agentTaskService.findPending('PurchaseOrder', purchaseOrderId, AgentTaskType.PO_HOLD);
+    if (!task) throw new BadRequestException('No pending hold task for this purchase order');
+
+    await this.agentTaskService.markResolved(
+      task.id,
+      outcome === 'approved' ? AgentTaskStatus.APPROVED : AgentTaskStatus.REJECTED,
+      userId,
+    );
+
+    const newStatus = outcome === 'approved' ? PurchaseOrderStatus.SENT : PurchaseOrderStatus.CANCELLED;
+    await this.prisma.purchaseOrder.update({ where: { id: purchaseOrderId }, data: { status: newStatus } });
+
+    await this.agentTaskService.logEvent(
+      'Demand Agent',
+      'PurchaseOrder',
+      purchaseOrderId,
+      outcome === 'approved' ? 'Released to SAP outbox' : 'Cancelled by reviewer',
+    );
+
+    return { purchaseOrderId, status: newStatus };
+  }
+
+  async listPurchaseOrders(limit = 50) {
+    return this.prisma.purchaseOrder.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { manufacturer: true, lines: { include: { product: true } } },
     });
   }
 

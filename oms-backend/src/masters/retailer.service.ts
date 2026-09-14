@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface RetailerInput {
+  code: string;
   name: string;
   gstin?: string;
   address?: string;

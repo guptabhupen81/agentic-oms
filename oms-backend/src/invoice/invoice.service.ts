@@ -2,9 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Decimal from 'decimal.js';
 
-interface RateLookup {
+interface RateOverride {
   productId: string;
-  rate: number; // unit price, ex-tax
+  rate: number; // unit price, ex-tax — overrides the product's list price for this invoice only
 }
 
 @Injectable()
@@ -17,12 +17,19 @@ export class InvoiceService {
    * warehouse's state -> IGST; otherwise CGST+SGST (split equally). State is
    * simplified here to a field on placeOfSupply for the showcase; a production
    * version would resolve it from registered addresses/GSTIN state codes.
+   *
+   * Pricing uses the product's list price by default (same source the order
+   * value preview and credit-limit check use), with per-line discount,
+   * free-item, and the order's overall discount all applied — so what a
+   * customer sees previewed on the order is exactly what they're invoiced.
+   * `rateOverrides` lets a specific invoice use a negotiated rate instead of
+   * list price, if ever needed; ordinary flow doesn't need to pass any.
    */
   async generateInvoiceForOrder(
     orderId: string,
     isIgst: boolean,
     placeOfSupply: string,
-    priceList: RateLookup[],
+    rateOverrides: RateOverride[] = [],
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -32,25 +39,31 @@ export class InvoiceService {
     });
     if (!order) throw new BadRequestException('Order not found');
 
-    const rateMap = new Map(priceList.map((p) => [p.productId, p.rate]));
+    const overrideMap = new Map(rateOverrides.map((r) => [r.productId, r.rate]));
+    const overallScale = new Decimal(1).minus(new Decimal(order.overallDiscountPercent.toString()).div(100));
 
     let subTotal = new Decimal(0);
     let totalTax = new Decimal(0);
     const invoiceLinesData: any[] = [];
 
     for (const line of order.lines) {
-      const rate = rateMap.get(line.productId);
-      if (rate === undefined) {
-        throw new BadRequestException(`No price supplied for product ${line.productId}`);
-      }
+      const listPrice = overrideMap.get(line.productId) ?? Number(line.product.defaultUnitPrice);
       const gstRate = new Decimal(line.product.gstRatePercent.toString()).div(100);
+
+      // Per-unit price after line discount + overall discount — applying this
+      // per unit means it distributes correctly across however many batches
+      // this line's allocation ended up split across.
+      const discountPercent = new Decimal(line.discountPercent.toString());
+      const effectiveUnitPrice = line.isFreeItem
+        ? new Decimal(0)
+        : new Decimal(listPrice).mul(new Decimal(1).minus(discountPercent.div(100))).mul(overallScale);
 
       // One invoice line per batch allocation, so the invoice itself shows
       // exactly which batch (and therefore expiry) the customer received —
       // required for traceability in FMCG distribution.
       for (const alloc of line.allocations) {
         const qty = new Decimal(alloc.allocatedQty.toString());
-        const taxableValue = qty.mul(rate);
+        const taxableValue = qty.mul(effectiveUnitPrice);
         const taxAmount = taxableValue.mul(gstRate);
 
         const cgst = isIgst ? new Decimal(0) : taxAmount.div(2);
@@ -64,7 +77,7 @@ export class InvoiceService {
           orderLineId: line.id,
           batchId: alloc.batchId,
           quantity: qty.toFixed(3),
-          rate: rate.toFixed(2),
+          rate: effectiveUnitPrice.toFixed(2),
           taxableValue: taxableValue.toFixed(2),
           cgstAmount: cgst.toFixed(2),
           sgstAmount: sgst.toFixed(2),

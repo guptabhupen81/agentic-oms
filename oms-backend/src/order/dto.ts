@@ -1,11 +1,15 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsPositive,
   IsString,
+  Max,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { OrderSourceType } from '@prisma/client';
@@ -18,6 +22,20 @@ export class CreateOrderLineDto {
   @IsNumber()
   @IsPositive()
   orderedQty: number;
+
+  /** Per-line discount, applied before tax. Ignored (treated as billed-zero)
+   * when isFreeItem is true. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
+
+  /** Billed at zero regardless of discountPercent — still allocated, picked,
+   * and shipped normally, just not charged for. */
+  @IsOptional()
+  @IsBoolean()
+  isFreeItem?: boolean;
 }
 
 export class CreateOrderDto {
@@ -39,6 +57,13 @@ export class CreateOrderDto {
 
   @IsEnum(OrderSourceType)
   sourceType: OrderSourceType;
+
+  /** Bill-level discount, applied after per-line discounts, before tax. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  overallDiscountPercent?: number;
 
   @IsArray()
   @ValidateNested({ each: true })
