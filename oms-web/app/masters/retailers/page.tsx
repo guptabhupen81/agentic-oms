@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../../lib/api';
 import type { RetailerDto } from '../../../lib/types';
 
-const EMPTY_FORM = { name: '', gstin: '', address: '', creditLimitAmount: '0' };
+const EMPTY_FORM = { code: '', name: '', gstin: '', address: '', creditLimitAmount: '0' };
 
 export default function RetailersPage() {
   const [retailers, setRetailers] = useState<RetailerDto[]>([]);
@@ -28,6 +28,7 @@ export default function RetailersPage() {
   function startEdit(r: RetailerDto) {
     setEditingId(r.id);
     setForm({
+      code: r.code,
       name: r.name,
       gstin: r.gstin ?? '',
       address: r.address ?? '',
@@ -46,6 +47,7 @@ export default function RetailersPage() {
     setBusy(true);
     try {
       const payload = {
+        code: form.code,
         name: form.name,
         gstin: form.gstin || undefined,
         address: form.address || undefined,
@@ -86,6 +88,15 @@ export default function RetailersPage() {
         <form onSubmit={handleSubmit}>
           <div className="row">
             <div className="field">
+              <label>Code</label>
+              <input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="RET-0002"
+                required
+              />
+            </div>
+            <div className="field">
               <label>Name</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
@@ -121,11 +132,12 @@ export default function RetailersPage() {
       <div className="card">
         <table>
           <thead>
-            <tr><th>Name</th><th>GSTIN</th><th>Credit limit / used</th><th>Status</th><th></th></tr>
+            <tr><th>Code</th><th>Name</th><th>GSTIN</th><th>Credit limit / used</th><th>Status</th><th></th></tr>
           </thead>
           <tbody>
             {retailers.map((r) => (
               <tr key={r.id} style={{ opacity: r.isActive ? 1 : 0.5 }}>
+                <td className="mono">{r.code}</td>
                 <td>{r.name}</td>
                 <td className="mono">{r.gstin || '—'}</td>
                 <td className="mono">₹{r.creditLimitAmount} / ₹{r.creditUsedAmount}</td>

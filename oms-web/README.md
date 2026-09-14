@@ -41,8 +41,12 @@ Set `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:3000`) if your
 backend isn't on the default port. Log in with the seeded demo account
 (`oms.exec@example.com` / `password123`), then walk through:
 
-1. **Orders** — create an order, then run FEFO allocation against a
-   warehouse ID (from the backend seed output) — see the batch split live.
+1. **Orders** — the order builder now supports everything at once: search a
+   product by SKU or name, see its real stock-in-hand for the selected
+   warehouse before adding it, add multiple lines, set a per-line discount
+   or mark a line free, set an overall bill discount, and watch the live
+   order value total update as you go. Create the order, then validate and
+   allocate as before.
 2. **Picklist** — generate a picklist from that order's ID, record picks,
    complete it (watch for the discrepancy warning if picked ≠ requested).
 3. **Van sales** — load a van from a warehouse batch, record a direct sale
@@ -58,7 +62,27 @@ backend isn't on the default port. Log in with the seeded demo account
    and Warehouses directly; Manufacturers and Product Hierarchy are
    view-only lists, matching the spec exactly. Creating a retailer or
    product here means you no longer need Prisma Studio to get real IDs for
-   the Orders page — copy them straight from these tables.
+   the Orders page — copy them straight from these tables. Retailers,
+   Products, Vans, and Warehouses all show their manually-entered code
+   (Retailer's `code`, Product's `sku`, Van's `registration`, Warehouse's
+   `code`) as the first column in every list.
+6. **Demand Agent** (`/demand`) — pick a warehouse, get real replenishment
+   recommendations from actual sales velocity, click "Create PO" to draft
+   one — watch the real 30-minute hold countdown, same mechanic as order
+   validation. Release or cancel it right there, or from Approvals.
+7. **Forecast Agent** (`/forecasting`) — add a named factor (promotion,
+   launch, competitor, event) scoped to a category or product, then run a
+   forecast with a base quantity per product — see exactly which factors
+   moved which line and by how much.
+8. **Inventory Agent** (`/inventory`) — real-time stock across every
+   warehouse, by batch, with free vs. allocated quantity broken out.
+
+The sidebar is grouped into **Agents** (the operational, agent-driven
+screens) and **Masters** (the data you manage directly) — matching how the
+system is meant to be read: masters are what agents reason over.
+
+Landing page (`/`) now redirects to `/login`, not `/orders` — you always
+start from an explicit sign-in.
 
 ## What's here vs. not yet built
 

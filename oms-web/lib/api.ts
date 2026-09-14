@@ -5,20 +5,33 @@ import type {
   AgentTaskDto,
   AllocationResult,
   CompletePicklistResponse,
+  CreateOrderInput,
+  ForecastDto,
+  ForecastFactorDto,
+  ForecastFactorInput,
   HierarchyNodeDto,
+  InventoryStockDto,
   InvoiceDto,
   LoginResponse,
   ManufacturerDto,
+  OrderListItemDto,
   OrderResponse,
+  OrderValueResultDto,
   PicklistDto,
+  PicklistListItemDto,
   ProductDto,
   ProductInput,
+  PurchaseOrderListItemDto,
+  ReplenishmentRecommendationDto,
   RetailerDto,
   RetailerInput,
+  RunForecastInput,
+  StockSummaryDto,
   ValidateOrderResult,
   VanDto,
   VanInput,
   VanLoadDto,
+  VanLoadListItemDto,
   WarehouseDto,
   WarehouseInput,
 } from './types';
@@ -74,13 +87,18 @@ export const api = {
 
   syncProducts: (sinceIso: string) => request<ProductDto[]>(`/products/sync?since=${encodeURIComponent(sinceIso)}`),
 
-  createOrder: (body: {
-    clientOrderId: string;
-    retailerId: string;
-    createdById: string;
-    sourceType: string;
-    lines: { productId: string; orderedQty: number }[];
-  }) => request<OrderResponse>('/orders', { method: 'POST', body: JSON.stringify(body) }),
+  createOrder: (body: CreateOrderInput) =>
+    request<OrderResponse>('/orders', { method: 'POST', body: JSON.stringify(body) }),
+
+  listOrders: (limit = 50) => request<OrderListItemDto[]>(`/orders?limit=${limit}`),
+
+  getOrderValue: (orderId: string) => request<OrderValueResultDto>(`/orders/${orderId}/value`),
+
+  searchProducts: (search: string) =>
+    request<ProductDto[]>(`/products?activeOnly=true&search=${encodeURIComponent(search)}`),
+
+  getWarehouseStockSummary: (warehouseId: string) =>
+    request<StockSummaryDto[]>(`/inventory/warehouse/${warehouseId}/summary`),
 
   runAllocation: (orderId: string, warehouseId: string) =>
     request<AllocationResult>('/allocation/run', { method: 'POST', body: JSON.stringify({ orderId, warehouseId }) }),
@@ -138,6 +156,10 @@ export const api = {
 
   getHierarchyTree: () => request<HierarchyNodeDto[]>('/products/hierarchy'),
 
+  // --- Picklist ---
+
+  listPicklists: (limit = 50) => request<PicklistListItemDto[]>(`/picklists?limit=${limit}`),
+
   generatePicklists: (orderIds: string[]) =>
     request<PicklistDto[]>('/picklists/generate', { method: 'POST', body: JSON.stringify({ orderIds }) }),
 
@@ -151,6 +173,10 @@ export const api = {
 
   completePicklist: (id: string) => request<CompletePicklistResponse>(`/picklists/${id}/complete`, { method: 'POST' }),
 
+  // --- Van ---
+
+  listVanLoads: (limit = 50) => request<VanLoadListItemDto[]>(`/van-loads?limit=${limit}`),
+
   loadVan: (body: { vanId: string; warehouseId: string; operatorId: string; lines: { batchId: string; quantity: number }[] }) =>
     request<VanLoadDto>('/van-loads', { method: 'POST', body: JSON.stringify(body) }),
 
@@ -162,6 +188,47 @@ export const api = {
   ) => request<InvoiceDto>(`/van-loads/${id}/sale`, { method: 'POST', body: JSON.stringify(body) }),
 
   unloadVan: (id: string) => request<VanLoadDto>(`/van-loads/${id}/unload`, { method: 'POST' }),
+
+  // --- Inventory visibility ---
+
+  getAllInventory: () => request<InventoryStockDto[]>('/inventory'),
+
+  getWarehouseInventory: (warehouseId: string) => request<InventoryStockDto[]>(`/inventory/warehouse/${warehouseId}`),
+
+  // --- Forecasting ---
+
+  listForecastFactors: () => request<ForecastFactorDto[]>('/forecast-factors'),
+
+  createForecastFactor: (body: ForecastFactorInput) =>
+    request<ForecastFactorDto>('/forecast-factors', { method: 'POST', body: JSON.stringify(body) }),
+
+  listForecasts: () => request<ForecastDto[]>('/forecasts'),
+
+  getForecast: (id: string) => request<ForecastDto>(`/forecasts/${id}`),
+
+  runForecast: (body: RunForecastInput) =>
+    request<ForecastDto>('/forecasts', { method: 'POST', body: JSON.stringify(body) }),
+
+  // --- Purchase / Demand ---
+
+  getReplenishmentRecommendations: (warehouseId: string, leadTimeDays = 10, targetCoverDays = 21) =>
+    request<ReplenishmentRecommendationDto[]>(
+      `/purchase/recommendations?warehouseId=${warehouseId}&leadTimeDays=${leadTimeDays}&targetCoverDays=${targetCoverDays}`,
+    ),
+
+  listPurchaseOrders: (limit = 50) => request<PurchaseOrderListItemDto[]>(`/purchase/orders?limit=${limit}`),
+
+  createPurchaseOrder: (body: { manufacturerId: string; lines: { productId: string; orderedQty: number }[] }) =>
+    request<PurchaseOrderListItemDto & { holdDueAt: string }>('/purchase/orders', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  resolvePOHold: (id: string, outcome: 'approved' | 'rejected') =>
+    request<{ purchaseOrderId: string; status: string }>(`/purchase/orders/${id}/resolve-hold`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome }),
+    }),
 };
 
 export { ApiError };

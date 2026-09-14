@@ -25,6 +25,7 @@ export interface ProductDto {
 
 export interface RetailerDto {
   id: string;
+  code: string;
   name: string;
   gstin: string | null;
   address: string | null;
@@ -67,6 +68,7 @@ export interface HierarchyNodeDto {
 // string JSON serialization). ---
 
 export interface RetailerInput {
+  code: string;
   name: string;
   gstin?: string;
   address?: string;
@@ -104,6 +106,61 @@ export interface OrderResponse {
   status: string;
 }
 
+export interface CreateOrderLineInput {
+  productId: string;
+  orderedQty: number;
+  discountPercent?: number;
+  isFreeItem?: boolean;
+}
+
+export interface CreateOrderInput {
+  clientOrderId: string;
+  retailerId: string;
+  createdById: string;
+  sourceType: string;
+  overallDiscountPercent?: number;
+  lines: CreateOrderLineInput[];
+}
+
+export interface OrderListItemDto {
+  id: string;
+  orderNumber: string;
+  status: string;
+  orderDate: string;
+  overallDiscountPercent: string;
+  estimatedValue: string;
+  retailer: { name: string; code: string };
+  lines: { orderedQty: string }[];
+}
+
+export interface OrderValueLineDto {
+  orderLineId: string;
+  productId: string;
+  productName: string;
+  orderedQty: string;
+  unitPrice: string;
+  discountPercent: string;
+  isFreeItem: boolean;
+  taxableValue: string;
+  taxAmount: string;
+  lineTotal: string;
+}
+
+export interface OrderValueResultDto {
+  orderId: string;
+  overallDiscountPercent: string;
+  lines: OrderValueLineDto[];
+  subTotal: string;
+  totalTax: string;
+  totalValue: string;
+}
+
+export interface StockSummaryDto {
+  productId: string;
+  sku: string;
+  stockInHand: string;
+}
+
 export interface BatchInfo {
   batchNumber: string;
   expiryDate: string;
@@ -130,6 +187,14 @@ export interface PicklistDto {
   lines: PicklistLineDto[];
 }
 
+export interface PicklistListItemDto {
+  id: string;
+  picklistNumber: string;
+  status: string;
+  createdAt: string;
+  warehouse: { name: string };
+}
+
 export interface CompletePicklistResponse {
   picklistId: string;
   status: string;
@@ -150,6 +215,14 @@ export interface VanLoadDto {
   warehouseId: string;
   status: string;
   lines: VanLoadLineDto[];
+}
+
+export interface VanLoadListItemDto {
+  id: string;
+  status: string;
+  loadDate: string;
+  van: { name: string; registration: string };
+  warehouse: { name: string };
 }
 
 export interface InvoiceDto {
@@ -205,4 +278,86 @@ export interface AgentEventDto {
   entityId: string;
   message: string;
   createdAt: string;
+}
+
+// --- Inventory visibility ---
+
+export interface InventoryStockDto {
+  id: string;
+  quantityOnHand: string;
+  quantityAllocated: string;
+  product: { name: string; sku: string };
+  batch: { batchNumber: string; expiryDate: string };
+  warehouse: { name: string; code: string };
+}
+
+// --- Forecasting ---
+
+export interface ForecastFactorInput {
+  name: string;
+  factorType: string;
+  hierarchyNodeId?: string;
+  productId?: string;
+  upliftPercent: number;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+}
+
+export interface ForecastFactorDto {
+  id: string;
+  name: string;
+  factorType: string;
+  hierarchyNodeId: string | null;
+  productId: string | null;
+  upliftPercent: string;
+  startDate: string;
+  endDate: string;
+  notes: string | null;
+}
+
+export interface RunForecastInput {
+  quarterLabel: string;
+  growthPercent: number;
+  lines: { productId: string; baseQty: number }[];
+}
+
+export interface ForecastLineDto {
+  id: string;
+  productId: string;
+  baseQty: string;
+  growthAdjustedQty: string;
+  finalQty: string;
+  appliedFactors: string;
+  product?: { name: string; sku: string };
+}
+
+export interface ForecastDto {
+  id: string;
+  quarterLabel: string;
+  growthPercent: string;
+  createdAt: string;
+  lines: ForecastLineDto[];
+}
+
+// --- Purchase / Demand ---
+
+export interface ReplenishmentRecommendationDto {
+  productId: string;
+  sku: string;
+  manufacturerId: string;
+  currentStock: string;
+  averageDailySales: string;
+  daysOfCoverRemaining: string;
+  recommendedOrderQty: string;
+  rationale: string;
+}
+
+export interface PurchaseOrderListItemDto {
+  id: string;
+  poNumber: string;
+  status: string;
+  createdAt: string;
+  manufacturer: { name: string };
+  lines: { orderedQty: string; product: { name: string } }[];
 }

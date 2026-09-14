@@ -56,6 +56,8 @@ export default function ApprovalsPage() {
     try {
       if (task.taskType === 'ORDER_VALIDATION') {
         await api.resolveValidation(task.entityId, outcome);
+      } else if (task.taskType === 'PO_HOLD') {
+        await api.resolvePOHold(task.entityId, outcome);
       } else {
         throw new Error(`Resolution for ${task.taskType} isn't wired up yet — next phase.`);
       }

@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const OPERATIONS_LINKS = [
-  { href: '/orders', label: 'Orders' },
-  { href: '/picklists', label: 'Picklist' },
+const AGENT_LINKS = [
+  { href: '/orders', label: 'Order Agent' },
+  { href: '/demand', label: 'Demand Agent' },
+  { href: '/forecasting', label: 'Forecast Agent' },
+  { href: '/inventory', label: 'Inventory Agent' },
+  { href: '/picklists', label: 'Fulfilment (Picklist)' },
   { href: '/van', label: 'Van sales' },
   { href: '/approvals', label: 'Approvals' },
   { href: '/trace', label: 'Agent Trace' },
@@ -22,9 +25,11 @@ const MASTER_LINKS = [
 
 export function SidebarNav() {
   const pathname = usePathname();
+
   return (
     <nav>
-      {OPERATIONS_LINKS.map((link) => (
+      <div style={{ padding: '4px 20px 6px 20px', fontSize: 12, color: 'var(--text-muted)' }}>Agents</div>
+      {AGENT_LINKS.map((link) => (
         <Link key={link.href} href={link.href} className={`nav-link ${pathname === link.href ? 'active' : ''}`}>
           {link.label}
         </Link>

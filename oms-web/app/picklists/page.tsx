@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
-import type { CompletePicklistResponse, PicklistDto } from '../../lib/types';
+import type { CompletePicklistResponse, PicklistDto, PicklistListItemDto } from '../../lib/types';
 
 export default function PicklistsPage() {
+  const [picklists, setPicklists] = useState<PicklistListItemDto[]>([]);
   const [orderIdsInput, setOrderIdsInput] = useState('');
   const [picklistIdInput, setPicklistIdInput] = useState('');
   const [picklist, setPicklist] = useState<PicklistDto | null>(null);
@@ -13,15 +14,41 @@ export default function PicklistsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  async function refreshList() {
+    try {
+      setPicklists(await api.listPicklists());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    }
+  }
+
+  useEffect(() => {
+    refreshList();
+  }, []);
+
+  async function loadById(id: string) {
+    setError(null);
+    setBusy(true);
+    try {
+      setPicklist(await api.getPicklist(id));
+      setCompletion(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleGenerate() {
     setError(null);
     setBusy(true);
     try {
       const orderIds = orderIdsInput.split(',').map((s) => s.trim()).filter(Boolean);
-      const picklists = await api.generatePicklists(orderIds);
-      setPicklist(picklists[0] ?? null);
+      const generated = await api.generatePicklists(orderIds);
+      setPicklist(generated[0] ?? null);
       setCompletion(null);
-      if (!picklists[0]) setError('No picklist generated — has allocation run for this order?');
+      if (!generated[0]) setError('No picklist generated — has allocation run for this order?');
+      await refreshList();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -30,16 +57,7 @@ export default function PicklistsPage() {
   }
 
   async function handleLoad() {
-    setError(null);
-    setBusy(true);
-    try {
-      setPicklist(await api.getPicklist(picklistIdInput));
-      setCompletion(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+    await loadById(picklistIdInput);
   }
 
   async function handleSavePick(lineId: string) {
@@ -61,6 +79,7 @@ export default function PicklistsPage() {
     setBusy(true);
     try {
       setCompletion(await api.completePicklist(picklist.id));
+      await refreshList();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -71,6 +90,30 @@ export default function PicklistsPage() {
   return (
     <div>
       <h1>Picklist</h1>
+
+      <div className="card">
+        <h2 style={{ marginTop: 0 }}>Recent picklists</h2>
+        {picklists.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>No picklists yet.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Picklist</th><th>Warehouse</th><th>Status</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+              {picklists.map((p) => (
+                <tr key={p.id}>
+                  <td className="mono">{p.picklistNumber}</td>
+                  <td>{p.warehouse.name}</td>
+                  <td><span className="status-pill">{p.status}</span></td>
+                  <td className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {new Date(p.createdAt).toLocaleString()}
+                  </td>
+                  <td><button className="secondary" onClick={() => loadById(p.id)}>Open</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <div className="card">
         <div className="field">
