@@ -93,6 +93,7 @@ model Product {
   orderLines        OrderLine[]
   inventoryStocks   InventoryStock[]
   forecastLines     ForecastLine[]
+  purchaseOrderLines PurchaseOrderLine[]
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +361,7 @@ model PurchaseOrderLine {
   purchaseOrderId String
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
   productId     String
+  product       Product       @relation(fields: [productId], references: [id])
   orderedQty    Decimal       @db.Decimal(14, 3)
   receivedQty   Decimal       @default(0) @db.Decimal(14, 3)
   batchId       String?       // populated once GRN/batch is issued by manufacturer
