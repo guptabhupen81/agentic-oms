@@ -27,6 +27,8 @@ import type {
   RetailerInput,
   RunForecastInput,
   StockSummaryDto,
+  TruckDto,
+  TruckInput,
   ValidateOrderResult,
   VanDto,
   VanInput,
@@ -229,6 +231,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ outcome }),
     }),
+
+  receiveGoods: (body: {
+    purchaseOrderLineId: string;
+    batchNumber: string;
+    manufactureDate: string;
+    expiryDate: string;
+    receivedQty: number;
+    warehouseId: string;
+    truckId?: string;
+  }) => request<{ id: string; batchNumber: string }>('/purchase/orders/receive', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }),
+
+  // --- Trucks (primary/inbound fleet, separate from Vans) ---
+
+  listTrucks: (activeOnly = false) => request<TruckDto[]>(`/trucks?activeOnly=${activeOnly}`),
+  createTruck: (body: TruckInput) => request<TruckDto>('/trucks', { method: 'POST', body: JSON.stringify(body) }),
+  updateTruck: (id: string, body: Partial<TruckInput>) =>
+    request<TruckDto>(`/trucks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleTruckActive: (id: string, isActive: boolean) =>
+    request<TruckDto>(`/trucks/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
 };
 
 export { ApiError };

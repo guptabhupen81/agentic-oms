@@ -21,6 +21,26 @@ export interface ProductDto {
   defaultUnitPrice?: string;
   minOrderQty?: string | null;
   maxOrderQty?: string | null;
+  primaryMoq?: string | null;
+  caseQty?: string | null;
+  unitWeightKg?: string | null;
+  unitVolumeCbm?: string | null;
+}
+
+export interface TruckDto {
+  id: string;
+  registration: string;
+  name: string;
+  capacityWeightKg: string | null;
+  capacityVolumeCbm: string | null;
+  isActive: boolean;
+}
+
+export interface TruckInput {
+  registration: string;
+  name: string;
+  capacityWeightKg?: number;
+  capacityVolumeCbm?: number;
 }
 
 export interface RetailerDto {
@@ -97,6 +117,10 @@ export interface ProductInput {
   defaultUnitPrice?: number;
   minOrderQty?: number;
   maxOrderQty?: number;
+  primaryMoq?: number;
+  caseQty?: number;
+  unitWeightKg?: number;
+  unitVolumeCbm?: number;
 }
 
 export interface OrderResponse {
@@ -359,5 +383,5 @@ export interface PurchaseOrderListItemDto {
   status: string;
   createdAt: string;
   manufacturer: { name: string };
-  lines: { orderedQty: string; product: { name: string } }[];
+  lines: { id: string; orderedQty: string; receivedQty: string; product: { id: string; name: string } }[];
 }

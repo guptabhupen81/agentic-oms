@@ -30,6 +30,28 @@ tic. See `app/globals.css` for the token list.
 online client — matches the brief ("Web can be accessed online"). If a call
 fails, the page shows the error; there's no local queue.
 
+## The workspace shell (tabs, not page navigation)
+
+The whole authenticated app is now **one page** (`app/page.tsx`) rather than
+15 separate routes navigated via links. Every sidebar click opens or
+switches to a **tab** in React state — a real route change would unmount
+the entire tree and lose every other open tab's work, which defeats the
+point of tabs. Dashboard is permanently pinned as tab zero and can't be
+closed; up to 5 more can be open alongside it (6 total) — trying to open a
+7th prompts to close one first, and closing any non-Dashboard tab asks for
+confirmation first.
+
+The individual route files (`/orders`, `/masters/products`, etc.) still
+exist and still work as real Next.js routes — the shell just imports each
+one's component directly and renders it inside a tab, so there's exactly one
+implementation of each screen, not two. Known limitation: visiting one of
+those routes directly by URL renders it standalone, without the
+sidebar/tab chrome — the primary flow is always through `/` after login.
+
+**Dashboard** (`/`, after login) shows one live summary card per agent,
+pulling from the same endpoints each agent's own page uses — click any card
+to open that agent's tab.
+
 ## Getting started
 
 ```bash
@@ -37,11 +59,10 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:3000`) if your
-backend isn't on the default port. Log in with the seeded demo account
-(`oms.exec@example.com` / `password123`), then walk through:
+Log in at `/login` — you'll land on the Dashboard afterward, not Orders.
 
-1. **Orders** — the order builder now supports everything at once: search a
+1. **Dashboard** — click any agent card to open its tab.
+2. **Orders** — the order builder now supports everything at once: search a
    product by SKU or name, see its real stock-in-hand for the selected
    warehouse before adding it, add multiple lines, set a per-line discount
    or mark a line free, set an overall bill discount, and watch the live
@@ -69,7 +90,13 @@ backend isn't on the default port. Log in with the seeded demo account
 6. **Demand Agent** (`/demand`) — pick a warehouse, get real replenishment
    recommendations from actual sales velocity, click "Create PO" to draft
    one — watch the real 30-minute hold countdown, same mechanic as order
-   validation. Release or cancel it right there, or from Approvals.
+   validation. Release or cancel it right there, or from Approvals. You can
+   also build a **manual PO** directly (pick a manufacturer, search and add
+   products) without going through a recommendation, and record a **Goods
+   Receipt** against any sent/partially-received PO — pick the line, enter
+   batch number, dates, quantity, warehouse, and optionally which truck
+   delivered it; watch the PO's status move to Partially Received or
+   Received automatically once you do.
 7. **Forecast Agent** (`/forecasting`) — add a named factor (promotion,
    launch, competitor, event) scoped to a category or product, then run a
    forecast with a base quantity per product — see exactly which factors

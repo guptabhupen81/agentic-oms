@@ -15,6 +15,10 @@ const EMPTY_FORM = {
   defaultUnitPrice: '0',
   minOrderQty: '',
   maxOrderQty: '',
+  primaryMoq: '',
+  caseQty: '',
+  unitWeightKg: '',
+  unitVolumeCbm: '',
 };
 
 /** Flattens the hierarchy tree into a single list with indentation, so any
@@ -67,6 +71,10 @@ export default function ProductsPage() {
       defaultUnitPrice: p.defaultUnitPrice ?? '0',
       minOrderQty: p.minOrderQty ?? '',
       maxOrderQty: p.maxOrderQty ?? '',
+      primaryMoq: p.primaryMoq ?? '',
+      caseQty: p.caseQty ?? '',
+      unitWeightKg: p.unitWeightKg ?? '',
+      unitVolumeCbm: p.unitVolumeCbm ?? '',
     });
   }
 
@@ -91,6 +99,10 @@ export default function ProductsPage() {
         defaultUnitPrice: Number(form.defaultUnitPrice),
         minOrderQty: form.minOrderQty ? Number(form.minOrderQty) : undefined,
         maxOrderQty: form.maxOrderQty ? Number(form.maxOrderQty) : undefined,
+        primaryMoq: form.primaryMoq ? Number(form.primaryMoq) : undefined,
+        caseQty: form.caseQty ? Number(form.caseQty) : undefined,
+        unitWeightKg: form.unitWeightKg ? Number(form.unitWeightKg) : undefined,
+        unitVolumeCbm: form.unitVolumeCbm ? Number(form.unitVolumeCbm) : undefined,
       };
       if (editingId) {
         await api.updateProduct(editingId, payload);
@@ -127,7 +139,7 @@ export default function ProductsPage() {
         <form onSubmit={handleSubmit}>
           <div className="row">
             <div className="field">
-              <label>SKU</label>
+              <label>SKU (code)</label>
               <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} required />
             </div>
             <div className="field">
@@ -180,8 +192,6 @@ export default function ProductsPage() {
                 onChange={(e) => setForm({ ...form, gstRatePercent: e.target.value })}
               />
             </div>
-          </div>
-          <div className="row">
             <div className="field">
               <label>List price (₹)</label>
               <input
@@ -190,6 +200,12 @@ export default function ProductsPage() {
                 onChange={(e) => setForm({ ...form, defaultUnitPrice: e.target.value })}
               />
             </div>
+          </div>
+
+          <h2 style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 20 }}>
+            Secondary fulfillment — Distributor to Retailer (Order Desk)
+          </h2>
+          <div className="row">
             <div className="field">
               <label>Min order qty</label>
               <input
@@ -207,7 +223,52 @@ export default function ProductsPage() {
               />
             </div>
           </div>
-          <button type="submit" disabled={busy}>{editingId ? 'Save changes' : 'Add product'}</button>
+
+          <h2 style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 20 }}>
+            Primary fulfillment — Manufacturer to Distributor (Purchase Orders)
+          </h2>
+          <div className="row">
+            <div className="field">
+              <label>Primary MOQ</label>
+              <input
+                type="number"
+                value={form.primaryMoq}
+                onChange={(e) => setForm({ ...form, primaryMoq: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Case qty (units/case)</label>
+              <input
+                type="number"
+                value={form.caseQty}
+                onChange={(e) => setForm({ ...form, caseQty: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <h2 style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 20 }}>
+            Physical attributes — shared by Primary (truck) and Secondary (van) load planning
+          </h2>
+          <div className="row">
+            <div className="field">
+              <label>Unit weight (kg)</label>
+              <input
+                type="number"
+                value={form.unitWeightKg}
+                onChange={(e) => setForm({ ...form, unitWeightKg: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Unit volume (m³)</label>
+              <input
+                type="number"
+                value={form.unitVolumeCbm}
+                onChange={(e) => setForm({ ...form, unitVolumeCbm: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{editingId ? 'Save changes' : 'Add product'}</button>
           {editingId && (
             <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={resetForm}>
               Cancel
@@ -220,7 +281,7 @@ export default function ProductsPage() {
       <div className="card">
         <table>
           <thead>
-            <tr><th>SKU</th><th>Name</th><th>Price</th><th>Min/Max qty</th><th>Status</th><th></th></tr>
+            <tr><th>SKU</th><th>Name</th><th>Price</th><th>Secondary min/max</th><th>Primary MOQ/case</th><th>Status</th><th></th></tr>
           </thead>
           <tbody>
             {products.map((p) => (
@@ -229,6 +290,7 @@ export default function ProductsPage() {
                 <td>{p.name}</td>
                 <td className="mono">₹{p.defaultUnitPrice}</td>
                 <td className="mono">{p.minOrderQty ?? '—'} / {p.maxOrderQty ?? '—'}</td>
+                <td className="mono">{p.primaryMoq ?? '—'} / {p.caseQty ?? '—'}</td>
                 <td><span className="status-pill">{p.isActive ? 'Active' : 'Inactive'}</span></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="secondary" onClick={() => startEdit(p)}>Edit</button>

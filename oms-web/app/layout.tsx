@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { SidebarNav } from './sidebar-nav';
 
 export const metadata: Metadata = {
   title: 'Agentic OMS',
@@ -16,18 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>
-        <div className="app-shell">
-          <aside className="sidebar">
-            <div className="brand">
-              Agentic OMS
-              <span className="sub">FMCG distribution</span>
-            </div>
-            <SidebarNav />
-          </aside>
-          <main className="main">{children}</main>
-        </div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
