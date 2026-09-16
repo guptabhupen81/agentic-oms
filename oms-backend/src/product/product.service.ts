@@ -69,6 +69,10 @@ export class ProductService {
     defaultUnitPrice?: number;
     minOrderQty?: number;
     maxOrderQty?: number;
+    primaryMoq?: number;
+    caseQty?: number;
+    unitWeightKg?: number;
+    unitVolumeCbm?: number;
   }) {
     return this.prisma.product.create({ data });
   }

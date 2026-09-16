@@ -130,6 +130,32 @@ costs nothing — fits the low-recurring-cost requirement. `MAX_TOOL_ROUNDS` in
 `agent.service.ts` caps how many tool-call rounds one chat turn can take, so
 a stuck loop can't run away with API spend.
 
+## Primary vs. Secondary fulfillment
+
+Two physically and organizationally different flows now have distinct
+support throughout:
+
+- **Primary** (Manufacturer → Distributor): Purchase Orders, the Goods
+  Receipt process (`POST /purchase/orders/receive`, now recomputes the PO's
+  overall status — `PARTIALLY_RECEIVED` / `RECEIVED` — from every line's
+  actual received quantity rather than trusting the caller), and the new
+  **Truck** master (`/trucks`) — a separate fleet from Van, since inbound
+  trucking is sized and scheduled completely differently from outbound van
+  rounds. A truck can optionally be recorded against a batch at GRN time.
+- **Secondary** (Distributor → Retailer): Orders, Order validation, Picklist,
+  and Van sales — using the existing **Van** master.
+- **Product attributes split accordingly**: `minOrderQty`/`maxOrderQty`
+  govern secondary (retailer order) validation; new `primaryMoq`/`caseQty`
+  govern primary (purchase order) sizing; `unitWeightKg`/`unitVolumeCbm` are
+  shared physical attributes both a truck-load and a van-load calculation
+  would need (not yet used in an automated load-planning calculation — the
+  data is captured, the optimization logic is a future increment).
+
+Manual PO creation was already possible via the existing
+`POST /purchase/orders` (it never required going through a recommendation);
+the web app now exposes that directly as a Manual PO builder alongside the
+recommendation-driven flow.
+
 ## Order Management enhancements
 
 - **Multiple products per order** — was already supported by the schema

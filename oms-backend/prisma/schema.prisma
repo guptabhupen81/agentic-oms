@@ -89,6 +89,17 @@ model Product {
   isActive          Boolean               @default(true)
   createdAt         DateTime              @default(now())
 
+  // --- Secondary fulfillment (Distributor -> Retailer, via Order Desk / Van) ---
+  // minOrderQty/maxOrderQty above already serve this purpose (retailer order validation).
+
+  // --- Primary fulfillment (Manufacturer -> Distributor, via Purchase Orders) ---
+  primaryMoq        Decimal?              @db.Decimal(14, 3) // minimum order qty when raising a PO to the manufacturer
+  caseQty           Decimal?              @db.Decimal(10, 2) // units per case — POs should round to case multiples
+
+  // --- Shared physical attributes (both primary truck-load and secondary van-load optimization) ---
+  unitWeightKg      Decimal?              @db.Decimal(10, 3)
+  unitVolumeCbm     Decimal?              @db.Decimal(10, 4)
+
   batches           Batch[]
   orderLines        OrderLine[]
   inventoryStocks   InventoryStock[]
@@ -109,6 +120,8 @@ model Batch {
   manufacturer    Manufacturer  @relation(fields: [manufacturerId], references: [id])
   manufactureDate DateTime
   expiryDate      DateTime
+  truckId         String?       // which primary-inbound truck delivered this batch, if recorded at GRN
+  truck           Truck?        @relation(fields: [truckId], references: [id])
   createdAt       DateTime      @default(now())
 
   inventoryStocks   InventoryStock[]
@@ -149,6 +162,22 @@ model Van {
   createdAt    DateTime @default(now())
 
   vanLoads     VanLoad[]
+}
+
+// Primary (Manufacturer -> Distributor) inbound logistics — kept as a
+// separate master from Van (which is secondary, Distributor -> Retailer)
+// since the two fleets are typically managed, sized, and scheduled
+// completely differently.
+model Truck {
+  id                String   @id @default(cuid())
+  registration      String   @unique
+  name              String
+  capacityWeightKg  Decimal? @db.Decimal(10, 2)
+  capacityVolumeCbm Decimal? @db.Decimal(10, 3)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  batches           Batch[]  // batches received via this truck at GRN time
 }
 
 // ---------------------------------------------------------------------------

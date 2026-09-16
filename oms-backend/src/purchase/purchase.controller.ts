@@ -45,6 +45,7 @@ export class PurchaseController {
       expiryDate: string;
       receivedQty: number;
       warehouseId: string;
+      truckId?: string;
     },
   ) {
     return this.purchaseService.receivePurchaseOrderLine(
@@ -54,6 +55,7 @@ export class PurchaseController {
       new Date(body.expiryDate),
       body.receivedQty,
       body.warehouseId,
+      body.truckId,
     );
   }
 }

@@ -152,6 +152,20 @@ export class PurchaseService {
   }
 
   /** Manufacturer issues the batch/expiry at GRN time — this is where Batch rows are born. */
+  /**
+   * Goods Receipt (GRN): manufacturer issues the batch/expiry at this point,
+   * optionally against a specific inbound truck. After recording the
+   * receipt, the whole PO's status is recomputed from ALL its lines —
+   * PARTIALLY_RECEIVED once any quantity has arrived, RECEIVED once every
+   * line is fully covered — rather than trusting the caller to know the
+   * PO's overall state.
+   *
+   * Known limitation: PurchaseOrderLine.batchId is a single reference, so if
+   * one line's quantity arrives across more than one GRN event (different
+   * batch numbers), only the most recent batch is linked from the line
+   * itself — each individual Batch and its InventoryStock are still created
+   * correctly, this only affects the convenience backlink on the line.
+   */
   async receivePurchaseOrderLine(
     purchaseOrderLineId: string,
     batchNumber: string,
@@ -159,6 +173,7 @@ export class PurchaseService {
     expiryDate: Date,
     receivedQty: number,
     warehouseId: string,
+    truckId?: string,
   ) {
     const line = await this.prisma.purchaseOrderLine.findUnique({
       where: { id: purchaseOrderLineId },
@@ -166,35 +181,60 @@ export class PurchaseService {
     });
     if (!line) throw new Error('Purchase order line not found');
 
-    return this.prisma.$transaction(async (tx: any) => {
-      const batch = await tx.batch.create({
+    const batch = await this.prisma.$transaction(async (tx: any) => {
+      const newBatch = await tx.batch.create({
         data: {
           batchNumber,
           productId: line.productId,
           manufacturerId: line.purchaseOrder.manufacturerId,
           manufactureDate,
           expiryDate,
+          truckId: truckId ?? undefined,
         },
       });
 
       await tx.purchaseOrderLine.update({
         where: { id: purchaseOrderLineId },
-        data: { receivedQty: { increment: receivedQty }, batchId: batch.id },
+        data: { receivedQty: { increment: receivedQty }, batchId: newBatch.id },
       });
 
       await tx.inventoryStock.upsert({
-        where: { warehouseId_batchId: { warehouseId, batchId: batch.id } },
+        where: { warehouseId_batchId: { warehouseId, batchId: newBatch.id } },
         update: { quantityOnHand: { increment: receivedQty.toString() } },
         create: {
           warehouseId,
-          batchId: batch.id,
+          batchId: newBatch.id,
           productId: line.productId,
           quantityOnHand: receivedQty.toString(),
         },
       });
 
-      return batch;
+      return newBatch;
     });
+
+    // Recompute the PO's overall status from every line's received-vs-ordered quantity.
+    const allLines = await this.prisma.purchaseOrderLine.findMany({
+      where: { purchaseOrderId: line.purchaseOrderId },
+    });
+    const allFullyReceived = allLines.every((l: any) => new Decimal(l.receivedQty.toString()).gte(l.orderedQty.toString()));
+    const anyReceived = allLines.some((l: any) => new Decimal(l.receivedQty.toString()).gt(0));
+    const newStatus = allFullyReceived
+      ? PurchaseOrderStatus.RECEIVED
+      : anyReceived
+        ? PurchaseOrderStatus.PARTIALLY_RECEIVED
+        : undefined;
+
+    if (newStatus) {
+      await this.prisma.purchaseOrder.update({ where: { id: line.purchaseOrderId }, data: { status: newStatus } });
+      await this.agentTaskService.logEvent(
+        'Demand Agent',
+        'PurchaseOrder',
+        line.purchaseOrderId,
+        `Goods receipt recorded: ${batchNumber}, qty ${receivedQty} — PO now ${newStatus}`,
+      );
+    }
+
+    return batch;
   }
 
   private async generatePoNumber(): Promise<string> {
