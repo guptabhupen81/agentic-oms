@@ -1,0 +1,12 @@
+{
+  "name": "oms-regression-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone regression checks for the Agentic OMS core calculation logic (order discounts/tax, FEFO allocation, replenishment math). No database, no server — pure logic re-implementations tested against hand-calculated expected values.",
+  "scripts": {
+    "test": "node run-all.js"
+  },
+  "dependencies": {
+    "decimal.js": "^10.4.3"
+  }
+}
