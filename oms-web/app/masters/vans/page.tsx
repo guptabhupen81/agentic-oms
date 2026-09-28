@@ -99,12 +99,17 @@ export default function VansPage() {
 
       <div className="card">
         <table>
-          <thead><tr><th>Registration</th><th>Name</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Registration</th><th>Name</th><th>Assigned salesman</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {vans.map((v) => (
               <tr key={v.id} style={{ opacity: v.isActive ? 1 : 0.5 }}>
                 <td className="mono">{v.registration}</td>
                 <td>{v.name}</td>
+                <td>
+                  {v.assignedSalesman
+                    ? `${v.assignedSalesman.name} (${v.assignedSalesman.sellerType})`
+                    : <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}
+                </td>
                 <td><span className="status-pill">{v.isActive ? 'Active' : 'Inactive'}</span></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="secondary" onClick={() => startEdit(v)}>Edit</button>
@@ -116,6 +121,9 @@ export default function VansPage() {
             ))}
           </tbody>
         </table>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 12 }}>
+          Salesman assignment is managed from the Salesmen screen.
+        </p>
       </div>
     </div>
   );

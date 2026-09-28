@@ -48,10 +48,55 @@ export interface RetailerDto {
   code: string;
   name: string;
   gstin: string | null;
+  pinCode: string | null;
+  city: string | null;
+  state: string | null;
   address: string | null;
   creditLimitAmount: string;
   creditUsedAmount: string;
   isActive: boolean;
+  channelNodeId: string | null;
+  channelNode?: ChannelHierarchyNodeDto | null;
+}
+
+export interface PincodeLookupDto {
+  pinCode: string;
+  city: string;
+  state: string;
+}
+
+export type SellerType = 'PRE_SELLER' | 'VAN_SELLER' | 'DELIVERY_BOY';
+
+export interface SalesmanDto {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  sellerType: SellerType;
+  isActive: boolean;
+  van?: VanDto | null;
+}
+
+export interface SalesmanInput {
+  code: string;
+  name: string;
+  phone?: string;
+  sellerType: SellerType;
+}
+
+export interface RetailerSalesmanMappingDto {
+  id: string;
+  retailerId: string;
+  salesmanId: string;
+  salesman: SalesmanDto;
+}
+
+export interface ChannelHierarchyNodeDto {
+  id: string;
+  name: string;
+  level: number;
+  parentId: string | null;
+  children: ChannelHierarchyNodeDto[];
 }
 
 export interface WarehouseDto {
@@ -67,6 +112,8 @@ export interface VanDto {
   registration: string;
   name: string;
   isActive: boolean;
+  assignedSalesmanId: string | null;
+  assignedSalesman?: SalesmanDto | null;
 }
 
 export interface ManufacturerDto {
@@ -91,8 +138,10 @@ export interface RetailerInput {
   code: string;
   name: string;
   gstin?: string;
+  pinCode?: string;
   address?: string;
   creditLimitAmount?: number;
+  channelNodeId?: string;
 }
 
 export interface WarehouseInput {
@@ -208,6 +257,8 @@ export interface PicklistDto {
   picklistNumber: string;
   warehouseId: string;
   status: string;
+  vanId: string | null;
+  van?: VanDto | null;
   lines: PicklistLineDto[];
 }
 
@@ -217,6 +268,7 @@ export interface PicklistListItemDto {
   status: string;
   createdAt: string;
   warehouse: { name: string };
+  van?: { name: string; registration: string } | null;
 }
 
 export interface CompletePicklistResponse {

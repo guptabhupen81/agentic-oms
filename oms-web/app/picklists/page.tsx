@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
-import type { CompletePicklistResponse, PicklistDto, PicklistListItemDto } from '../../lib/types';
+import type { CompletePicklistResponse, PicklistDto, PicklistListItemDto, VanDto } from '../../lib/types';
 
 export default function PicklistsPage() {
   const [picklists, setPicklists] = useState<PicklistListItemDto[]>([]);
+  const [vans, setVans] = useState<VanDto[]>([]);
+  const [selectedVanId, setSelectedVanId] = useState('');
   const [orderIdsInput, setOrderIdsInput] = useState('');
   const [picklistIdInput, setPicklistIdInput] = useState('');
   const [picklist, setPicklist] = useState<PicklistDto | null>(null);
@@ -17,6 +19,7 @@ export default function PicklistsPage() {
   async function refreshList() {
     try {
       setPicklists(await api.listPicklists());
+      setVans(await api.listVans(false));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     }
@@ -79,6 +82,20 @@ export default function PicklistsPage() {
     setBusy(true);
     try {
       setCompletion(await api.completePicklist(picklist.id));
+      await refreshList();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAssignVan() {
+    if (!picklist || !selectedVanId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setPicklist(await api.assignPicklistToVan(picklist.id, selectedVanId));
       await refreshList();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
@@ -161,6 +178,35 @@ export default function PicklistsPage() {
             </tbody>
           </table>
           <button style={{ marginTop: 16 }} onClick={handleComplete} disabled={busy}>Complete picklist</button>
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border, #333)' }}>
+            <h3 style={{ marginTop: 0, fontSize: 14 }}>Load onto van (delivery)</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+              Only a van mapped to a Delivery Boy salesman can accept a picklist — a Van-Seller van is restricted.
+            </p>
+            {picklist.van ? (
+              <p className="mono">Loaded onto: {picklist.van.registration} — {picklist.van.name}</p>
+            ) : (
+              <div className="row">
+                <div className="field">
+                  <select value={selectedVanId} onChange={(e) => setSelectedVanId(e.target.value)}>
+                    <option value="">— select van —</option>
+                    {vans.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.registration} — {v.name}
+                        {v.assignedSalesman ? ` (${v.assignedSalesman.sellerType})` : ' (unassigned)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button className="secondary" onClick={handleAssignVan} disabled={busy || !selectedVanId}>
+                    Assign van
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

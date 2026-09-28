@@ -19,6 +19,8 @@ export const MASTER_LINKS = [
   { key: 'masters-warehouses', label: 'Warehouses' },
   { key: 'masters-manufacturers', label: 'Manufacturers' },
   { key: 'masters-hierarchy', label: 'Product hierarchy' },
+  { key: 'masters-salesmen', label: 'Salesmen' },
+  { key: 'masters-channel-hierarchy', label: 'Channel hierarchy' },
 ];
 
 interface SidebarNavProps {

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../../lib/api';
-import type { HierarchyNodeDto } from '../../../lib/types';
+import type { ChannelHierarchyNodeDto } from '../../../lib/types';
 
-function flatten(nodes: HierarchyNodeDto[], depth = 0, out: { node: HierarchyNodeDto; depth: number }[] = []) {
+function flatten(nodes: ChannelHierarchyNodeDto[], depth = 0, out: { node: ChannelHierarchyNodeDto; depth: number }[] = []) {
   for (const node of nodes) {
     out.push({ node, depth });
     if (node.children?.length) flatten(node.children, depth + 1, out);
@@ -12,8 +12,8 @@ function flatten(nodes: HierarchyNodeDto[], depth = 0, out: { node: HierarchyNod
   return out;
 }
 
-export default function HierarchyPage() {
-  const [tree, setTree] = useState<HierarchyNodeDto[]>([]);
+export default function ChannelHierarchyPage() {
+  const [tree, setTree] = useState<ChannelHierarchyNodeDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -23,7 +23,7 @@ export default function HierarchyPage() {
 
   async function refresh() {
     try {
-      setTree(await api.getHierarchyTree());
+      setTree(await api.getChannelHierarchyTree());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     }
@@ -34,8 +34,9 @@ export default function HierarchyPage() {
   }, []);
 
   const flat = flatten(tree);
+  const level1Options = flat.filter((f) => f.node.level === 1);
 
-  function startEdit(node: HierarchyNodeDto) {
+  function startEdit(node: ChannelHierarchyNodeDto) {
     setEditingId(node.id);
     setName(node.name);
     setParentId(node.parentId ?? '');
@@ -53,9 +54,11 @@ export default function HierarchyPage() {
     setBusy(true);
     try {
       if (editingId) {
-        await api.updateHierarchyNode(editingId, { name, parentId: parentId || null });
+        // Rename only — level/parent are immutable once created, to keep
+        // the "exactly 2 levels" invariant simple.
+        await api.updateChannelNode(editingId, { name });
       } else {
-        await api.createHierarchyNode({ name, parentId: parentId || undefined });
+        await api.createChannelNode({ name, parentId: parentId || undefined });
       }
       resetForm();
       await refresh();
@@ -67,11 +70,11 @@ export default function HierarchyPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Delete this node? Only allowed if it has no children and no products attached.')) return;
+    if (!window.confirm('Delete this node? Only allowed if it has no children and no retailers mapped.')) return;
     setBusy(true);
     setError(null);
     try {
-      await api.deleteHierarchyNode(id);
+      await api.deleteChannelNode(id);
       if (editingId === id) resetForm();
       await refresh();
     } catch (err) {
@@ -83,35 +86,32 @@ export default function HierarchyPage() {
 
   return (
     <div>
-      <h1>Product hierarchy</h1>
+      <h1>Channel hierarchy</h1>
       <p className="page-sub" style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>
-        Create, rename, re-parent, or delete category nodes. Level is derived automatically from the parent —
-        root nodes are Level 1.
+        Exactly 2 levels — Channel (Level 1) and Sub-Channel (Level 2). Retailers map only to a Level-2 node.
       </p>
 
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>{editingId ? 'Edit node' : 'Add node'}</h2>
+        <h2 style={{ marginTop: 0 }}>{editingId ? 'Rename node' : 'Add node'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="row">
             <div className="field">
               <label>Name</label>
               <input value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            <div className="field">
-              <label>Parent (blank = Level 1 / root)</label>
-              <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
-                <option value="">— none (root) —</option>
-                {flat
-                  .filter((f) => f.node.id !== editingId)
-                  .map((f) => (
-                    <option key={f.node.id} value={f.node.id}>
-                      {'—'.repeat(f.depth)} {f.node.name} (L{f.node.level})
-                    </option>
+            {!editingId && (
+              <div className="field">
+                <label>Parent (blank = Level 1 / Channel)</label>
+                <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                  <option value="">— none (new top-level Channel) —</option>
+                  {level1Options.map((f) => (
+                    <option key={f.node.id} value={f.node.id}>{f.node.name}</option>
                   ))}
-              </select>
-            </div>
+                </select>
+              </div>
+            )}
           </div>
-          <button type="submit" disabled={busy}>{editingId ? 'Save changes' : 'Add node'}</button>
+          <button type="submit" disabled={busy}>{editingId ? 'Save name' : 'Add node'}</button>
           {editingId && (
             <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={resetForm}>
               Cancel
@@ -123,14 +123,14 @@ export default function HierarchyPage() {
 
       <div className="card">
         <table>
-          <thead><tr><th>Category</th><th>Level</th><th></th></tr></thead>
+          <thead><tr><th>Channel / Sub-Channel</th><th>Level</th><th></th></tr></thead>
           <tbody>
             {flat.map(({ node, depth }) => (
               <tr key={node.id}>
                 <td style={{ paddingLeft: 12 + depth * 20 }}>{node.name}</td>
                 <td className="mono">{node.level}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button className="secondary" onClick={() => startEdit(node)}>Edit</button>
+                  <button className="secondary" onClick={() => startEdit(node)}>Rename</button>
                   <button className="secondary" style={{ marginLeft: 6 }} onClick={() => handleDelete(node.id)} disabled={busy}>
                     Delete
                   </button>

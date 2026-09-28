@@ -20,6 +20,8 @@ import TrucksPage from './masters/trucks/page';
 import WarehousesPage from './masters/warehouses/page';
 import ManufacturersPage from './masters/manufacturers/page';
 import HierarchyPage from './masters/hierarchy/page';
+import SalesmenPage from './masters/salesmen/page';
+import ChannelHierarchyPage from './masters/channel-hierarchy/page';
 
 const ALL_LINKS = [{ key: 'dashboard', label: 'Dashboard' }, ...AGENT_LINKS, ...MASTER_LINKS];
 const MAX_TABS = 6;
@@ -51,6 +53,8 @@ function renderView(key: string, openTab: (key: string, label: string) => void) 
     case 'masters-warehouses': return <WarehousesPage />;
     case 'masters-manufacturers': return <ManufacturersPage />;
     case 'masters-hierarchy': return <HierarchyPage />;
+    case 'masters-salesmen': return <SalesmenPage />;
+    case 'masters-channel-hierarchy': return <ChannelHierarchyPage />;
     default: return null;
   }
 }

@@ -4,6 +4,7 @@ import type {
   AgentEventDto,
   AgentTaskDto,
   AllocationResult,
+  ChannelHierarchyNodeDto,
   CompletePicklistResponse,
   CreateOrderInput,
   ForecastDto,
@@ -19,13 +20,17 @@ import type {
   OrderValueResultDto,
   PicklistDto,
   PicklistListItemDto,
+  PincodeLookupDto,
   ProductDto,
   ProductInput,
   PurchaseOrderListItemDto,
   ReplenishmentRecommendationDto,
   RetailerDto,
   RetailerInput,
+  RetailerSalesmanMappingDto,
   RunForecastInput,
+  SalesmanDto,
+  SalesmanInput,
   StockSummaryDto,
   TruckDto,
   TruckInput,
@@ -157,6 +162,48 @@ export const api = {
   listManufacturers: () => request<ManufacturerDto[]>('/manufacturers'),
 
   getHierarchyTree: () => request<HierarchyNodeDto[]>('/products/hierarchy'),
+  createHierarchyNode: (body: { name: string; parentId?: string }) =>
+    request<HierarchyNodeDto>('/products/hierarchy', { method: 'POST', body: JSON.stringify(body) }),
+  updateHierarchyNode: (id: string, body: { name?: string; parentId?: string | null }) =>
+    request<HierarchyNodeDto>(`/products/hierarchy/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteHierarchyNode: (id: string) =>
+    request<{ id: string }>(`/products/hierarchy/${id}`, { method: 'DELETE' }),
+
+  lookupPincode: (pinCode: string) => request<PincodeLookupDto>(`/retailers/lookup-pincode/${pinCode}`),
+
+  // --- Channel hierarchy ---
+
+  getChannelHierarchyTree: () => request<ChannelHierarchyNodeDto[]>('/channel-hierarchy'),
+  createChannelNode: (body: { name: string; parentId?: string }) =>
+    request<ChannelHierarchyNodeDto>('/channel-hierarchy', { method: 'POST', body: JSON.stringify(body) }),
+  updateChannelNode: (id: string, body: { name: string }) =>
+    request<ChannelHierarchyNodeDto>(`/channel-hierarchy/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteChannelNode: (id: string) => request<{ id: string }>(`/channel-hierarchy/${id}`, { method: 'DELETE' }),
+
+  // --- Salesmen ---
+
+  listSalesmen: (activeOnly = false) => request<SalesmanDto[]>(`/salesmen?activeOnly=${activeOnly}`),
+  createSalesman: (body: SalesmanInput) =>
+    request<SalesmanDto>('/salesmen', { method: 'POST', body: JSON.stringify(body) }),
+  updateSalesman: (id: string, body: Partial<SalesmanInput>) =>
+    request<SalesmanDto>(`/salesmen/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleSalesmanActive: (id: string, isActive: boolean) =>
+    request<SalesmanDto>(`/salesmen/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+
+  listRetailerSalesmanMappings: (retailerId: string) =>
+    request<RetailerSalesmanMappingDto[]>(`/salesmen/retailer-mappings/${retailerId}`),
+  mapSalesmanToRetailer: (retailerId: string, salesmanId: string) =>
+    request<RetailerSalesmanMappingDto>('/salesmen/retailer-mappings', {
+      method: 'POST',
+      body: JSON.stringify({ retailerId, salesmanId }),
+    }),
+  unmapSalesmanFromRetailer: (mappingId: string) =>
+    request<{ id: string }>(`/salesmen/retailer-mappings/${mappingId}`, { method: 'DELETE' }),
+
+  assignSalesmanToVan: (salesmanId: string, vanId: string) =>
+    request<VanDto>(`/salesmen/${salesmanId}/assign-van`, { method: 'POST', body: JSON.stringify({ vanId }) }),
+  unassignSalesmanFromVan: (salesmanId: string, vanId: string) =>
+    request<VanDto>(`/salesmen/${salesmanId}/unassign-van`, { method: 'POST', body: JSON.stringify({ vanId }) }),
 
   // --- Picklist ---
 
@@ -174,6 +221,9 @@ export const api = {
     }),
 
   completePicklist: (id: string) => request<CompletePicklistResponse>(`/picklists/${id}/complete`, { method: 'POST' }),
+
+  assignPicklistToVan: (id: string, vanId: string) =>
+    request<PicklistDto>(`/picklists/${id}/assign-van`, { method: 'POST', body: JSON.stringify({ vanId }) }),
 
   // --- Van ---
 
