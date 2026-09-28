@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ProductService } from './product.service';
 
 @Controller('products')
@@ -8,6 +8,21 @@ export class ProductController {
   @Get('hierarchy')
   getHierarchy() {
     return this.productService.getHierarchyTree();
+  }
+
+  @Post('hierarchy')
+  createHierarchyNode(@Body() body: { name: string; parentId?: string }) {
+    return this.productService.createHierarchyNode(body);
+  }
+
+  @Patch('hierarchy/:id')
+  updateHierarchyNode(@Param('id') id: string, @Body() body: { name?: string; parentId?: string | null }) {
+    return this.productService.updateHierarchyNode(id, body);
+  }
+
+  @Delete('hierarchy/:id')
+  deleteHierarchyNode(@Param('id') id: string) {
+    return this.productService.deleteHierarchyNode(id);
   }
 
   /** activeOnly=false shows inactive products too — used by the Product master

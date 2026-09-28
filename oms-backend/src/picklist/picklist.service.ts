@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrderStatus, PicklistStatus } from '@prisma/client';
+import { OrderStatus, PicklistStatus, SellerType } from '@prisma/client';
 import Decimal from 'decimal.js';
 
 @Injectable()
@@ -138,10 +138,34 @@ export class PicklistService {
     return { picklistId, status: PicklistStatus.COMPLETED, discrepancies };
   }
 
+  /**
+   * Loads a completed (or in-progress) picklist onto a van for delivery.
+   * Restricted to a van whose currently assigned salesman is a Delivery Boy
+   * — a van mapped to a Van-Seller (secondary direct-sale role) is not a
+   * delivery vehicle and must not accept picklists.
+   */
+  async assignVan(picklistId: string, vanId: string) {
+    const picklist = await this.prisma.picklist.findUnique({ where: { id: picklistId } });
+    if (!picklist) throw new BadRequestException('Picklist not found');
+
+    const van = await this.prisma.van.findUnique({ where: { id: vanId }, include: { assignedSalesman: true } });
+    if (!van) throw new BadRequestException('Van not found');
+    if (!van.assignedSalesman || van.assignedSalesman.sellerType !== SellerType.DELIVERY_BOY) {
+      throw new BadRequestException(
+        'Picklists may only be loaded onto a van mapped to a Delivery Boy salesman',
+      );
+    }
+
+    return this.prisma.picklist.update({ where: { id: picklistId }, data: { vanId } });
+  }
+
   async findById(id: string) {
     return this.prisma.picklist.findUnique({
       where: { id },
-      include: { lines: { include: { allocation: { include: { batch: true, orderLine: true } } } } },
+      include: {
+        lines: { include: { allocation: { include: { batch: true, orderLine: true } } } },
+        van: { include: { assignedSalesman: true } },
+      },
     });
   }
 
@@ -150,7 +174,7 @@ export class PicklistService {
     return this.prisma.picklist.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
-      include: { warehouse: true },
+      include: { warehouse: true, van: true },
     });
   }
 

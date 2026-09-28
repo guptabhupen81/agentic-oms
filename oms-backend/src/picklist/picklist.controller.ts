@@ -34,4 +34,9 @@ export class PicklistController {
   complete(@Param('id') id: string) {
     return this.picklistService.completePicklist(id);
   }
+
+  @Post(':id/assign-van')
+  assignVan(@Param('id') id: string, @Body() body: { vanId: string }) {
+    return this.picklistService.assignVan(id, body.vanId);
+  }
 }

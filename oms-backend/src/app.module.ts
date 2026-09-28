@@ -14,6 +14,8 @@ import { AgentModule } from './agent/agent.module';
 import { AgentTaskModule } from './agent-task/agent-task.module';
 import { MastersModule } from './masters/masters.module';
 import { ForecastModule } from './forecast/forecast.module';
+import { SalesmanModule } from './salesman/salesman.module';
+import { ChannelHierarchyModule } from './channel-hierarchy/channel-hierarchy.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { ForecastModule } from './forecast/forecast.module';
     AgentModule,
     AgentTaskModule,
     ForecastModule,
+    SalesmanModule,
+    ChannelHierarchyModule,
   ],
 })
 export class AppModule {}

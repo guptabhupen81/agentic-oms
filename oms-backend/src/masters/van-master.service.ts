@@ -13,12 +13,13 @@ export class VanMasterService {
   async list(activeOnly = true) {
     return this.prisma.van.findMany({
       where: activeOnly ? { isActive: true } : undefined,
+      include: { assignedSalesman: true },
       orderBy: { name: 'asc' },
     });
   }
 
   async findById(id: string) {
-    return this.prisma.van.findUnique({ where: { id } });
+    return this.prisma.van.findUnique({ where: { id }, include: { assignedSalesman: true } });
   }
 
   async create(data: VanInput) {

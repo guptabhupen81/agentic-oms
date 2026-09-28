@@ -10,6 +10,12 @@ export class RetailerController {
     return this.retailerService.list(activeOnly !== 'false');
   }
 
+  /** Live PIN code -> City/State preview for the retailer form, before save. */
+  @Get('lookup-pincode/:pinCode')
+  lookupPincode(@Param('pinCode') pinCode: string) {
+    return this.retailerService.lookupPincode(pinCode);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.retailerService.findById(id);

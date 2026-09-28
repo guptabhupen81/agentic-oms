@@ -162,6 +162,18 @@ model Van {
   createdAt    DateTime @default(now())
 
   vanLoads     VanLoad[]
+
+  // Seller<->Van mapping: only a Van-Seller or Delivery-Boy salesman may be
+  // mapped, and one van holds at most one salesman at a time. The unique
+  // constraint here (the FK is on Van, pointing at Salesman) enforces both
+  // directions at once: a given salesmanId can back at most one Van row, so
+  // a salesman can likewise be mapped to at most one van at a time.
+  assignedSalesmanId String?    @unique
+  assignedSalesman   Salesman?  @relation(fields: [assignedSalesmanId], references: [id])
+
+  // Picklists loaded onto this van for delivery — restricted (see Picklist.vanId)
+  // to vans whose assignedSalesman is a Delivery Boy.
+  picklists    Picklist[]
 }
 
 // Primary (Manufacturer -> Distributor) inbound logistics — kept as a
@@ -208,14 +220,78 @@ model Retailer {
   id                 String   @id @default(cuid())
   code               String   @unique // manually entered by the user, e.g. "RET-001"
   name               String
-  gstin              String?
+  gstin              String?  // format + checksum validated in RetailerService before save
+  pinCode            String?  // India PIN code; city/state below are auto-derived from this
+  city               String?
+  state              String?
   address            String?
   creditLimitAmount  Decimal  @default(0) @db.Decimal(14, 2)
   creditUsedAmount   Decimal  @default(0) @db.Decimal(14, 2)
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
 
-  orders    Order[]
+  // Retailers map only to a Level-2 Channel Hierarchy node.
+  channelNodeId String?
+  channelNode   ChannelHierarchyNode? @relation(fields: [channelNodeId], references: [id])
+
+  orders            Order[]
+  salesmanMappings  RetailerSalesmanMapping[]
+}
+
+// ---------------------------------------------------------------------------
+// Sales force: Pre-Seller / Van-Seller / Delivery Boy, with Retailer and Van
+// mapping rules enforced in SalesmanService (see notes on each rule there).
+// ---------------------------------------------------------------------------
+
+enum SellerType {
+  PRE_SELLER
+  VAN_SELLER
+  DELIVERY_BOY
+}
+
+model Salesman {
+  id         String     @id @default(cuid())
+  code       String     @unique
+  name       String
+  phone      String?
+  sellerType SellerType
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+
+  retailerMappings RetailerSalesmanMapping[]
+  van              Van? // opposite side of Van.assignedSalesman (0-or-1 van at a time)
+}
+
+// A retailer may have BOTH a Pre-Seller and a Delivery Boy mapped at once,
+// but a Van-Seller mapping is exclusive (a retailer with a Van-Seller can
+// have no other seller mapped, and vice versa) — enforced in SalesmanService.
+model RetailerSalesmanMapping {
+  id          String   @id @default(cuid())
+  retailerId  String
+  retailer    Retailer @relation(fields: [retailerId], references: [id])
+  salesmanId  String
+  salesman    Salesman @relation(fields: [salesmanId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([retailerId, salesmanId])
+  @@index([retailerId])
+}
+
+// ---------------------------------------------------------------------------
+// Channel Hierarchy — exactly 2 levels (e.g. Channel -> Sub-Channel).
+// Retailers map only to a Level-2 node (see Retailer.channelNodeId above).
+// ---------------------------------------------------------------------------
+
+model ChannelHierarchyNode {
+  id       String                 @id @default(cuid())
+  name     String
+  level    Int                    // 1 or 2, enforced in ChannelHierarchyService
+  parentId String?
+  parent   ChannelHierarchyNode?  @relation("ChannelTree", fields: [parentId], references: [id])
+  children ChannelHierarchyNode[] @relation("ChannelTree")
+  retailers Retailer[]
+
+  @@index([parentId])
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +390,12 @@ model Picklist {
   assignedTo    User?          @relation("PicklistAssignedTo", fields: [assignedToId], references: [id])
   status        PicklistStatus @default(PENDING)
   createdAt     DateTime       @default(now())
+
+  // Van this picklist has been loaded onto for delivery. Restricted (see
+  // PicklistService.assignVan) to a van whose assignedSalesman is a
+  // Delivery Boy — a van mapped to a Van-Seller cannot take a picklist.
+  vanId         String?
+  van           Van?           @relation(fields: [vanId], references: [id])
 
   lines         PicklistLine[]
 }
