@@ -6,7 +6,7 @@ import { api, session, ApiError } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('oms.exec@example.com');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,9 +16,13 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.login(email, password);
+      const res = await api.login(loginId, password);
       session.setToken(res.accessToken);
       session.setUserId(res.user.id);
+      session.setRole(res.user.role);
+      session.setProfile(
+        res.user.distributorName ? `${res.user.loginId} · ${res.user.distributorName}` : res.user.loginId,
+      );
       router.push('/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed');
@@ -34,8 +38,14 @@ export default function LoginPage() {
         <div className="card">
           <form onSubmit={handleSubmit}>
             <div className="field">
-              <label>Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+              <label>Login ID</label>
+              <input
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="Distributor code, or MDM_Admin"
+                autoComplete="username"
+                required
+              />
             </div>
             <div className="field">
               <label>Password</label>

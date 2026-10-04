@@ -12,6 +12,7 @@ export const AGENT_LINKS = [
 ];
 
 export const MASTER_LINKS = [
+  { key: 'masters-distributors', label: 'Distributors' },
   { key: 'masters-retailers', label: 'Retailers' },
   { key: 'masters-products', label: 'Products' },
   { key: 'masters-vans', label: 'Vans (Secondary)' },
@@ -23,7 +24,36 @@ export const MASTER_LINKS = [
   { key: 'masters-channel-hierarchy', label: 'Channel hierarchy' },
 ];
 
+// What each role sees.
+//  MDM_ADMIN: Distributors, Products, Trucks (Primary), Warehouses, Manufacturers + both hierarchies,
+//             and Agent Trace (oversight). No operational agents.
+//  DB_ADMIN (and the other distributor-side roles): Retailers, Salesmen, Vans + every Agent EXCEPT Agent Trace.
+const MDM_MASTER_KEYS = [
+  'masters-distributors',
+  'masters-products',
+  'masters-trucks',
+  'masters-warehouses',
+  'masters-manufacturers',
+  'masters-hierarchy',
+  'masters-channel-hierarchy',
+];
+const DB_MASTER_KEYS = ['masters-retailers', 'masters-salesmen', 'masters-vans'];
+
+export function linksForRole(role: string | null) {
+  if (role === 'MDM_ADMIN') {
+    return {
+      agents: AGENT_LINKS.filter((l) => l.key === 'trace'),
+      masters: MASTER_LINKS.filter((l) => MDM_MASTER_KEYS.includes(l.key)),
+    };
+  }
+  return {
+    agents: AGENT_LINKS.filter((l) => l.key !== 'trace'),
+    masters: MASTER_LINKS.filter((l) => DB_MASTER_KEYS.includes(l.key)),
+  };
+}
+
 interface SidebarNavProps {
+  role: string | null;
   activeKey: string;
   onSelect: (key: string, label: string) => void;
   onLogout: () => void;
@@ -32,7 +62,8 @@ interface SidebarNavProps {
 /** Every click opens (or switches to) a tab in the workspace shell — this is
  * no longer route-based navigation, since multiple tabs must stay mounted
  * simultaneously (a full page navigation would unmount everything). */
-export function SidebarNav({ activeKey, onSelect, onLogout }: SidebarNavProps) {
+export function SidebarNav({ role, activeKey, onSelect, onLogout }: SidebarNavProps) {
+  const { agents, masters } = linksForRole(role);
   return (
     <nav>
       <a
@@ -44,7 +75,7 @@ export function SidebarNav({ activeKey, onSelect, onLogout }: SidebarNavProps) {
       </a>
 
       <div style={{ padding: '14px 20px 6px 20px', fontSize: 12, color: 'var(--text-muted)' }}>Agents</div>
-      {AGENT_LINKS.map((link) => (
+      {agents.map((link) => (
         <a
           key={link.key}
           className={`nav-link ${activeKey === link.key ? 'active' : ''}`}
@@ -56,7 +87,7 @@ export function SidebarNav({ activeKey, onSelect, onLogout }: SidebarNavProps) {
       ))}
 
       <div style={{ padding: '14px 20px 6px 20px', fontSize: 12, color: 'var(--text-muted)' }}>Masters</div>
-      {MASTER_LINKS.map((link) => (
+      {masters.map((link) => (
         <a
           key={link.key}
           className={`nav-link ${activeKey === link.key ? 'active' : ''}`}

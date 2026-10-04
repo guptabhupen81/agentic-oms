@@ -5,7 +5,15 @@
 
 export interface LoginResponse {
   accessToken: string;
-  user: { id: string; name: string; email: string; role: string };
+  user: {
+    id: string;
+    name: string;
+    loginId: string;
+    email: string | null;
+    role: string;
+    distributorId: string | null;
+    distributorName: string | null;
+  };
 }
 
 export interface ProductDto {
@@ -114,6 +122,18 @@ export interface VanDto {
   isActive: boolean;
   assignedSalesmanId: string | null;
   assignedSalesman?: SalesmanDto | null;
+}
+
+export interface DistributorDto {
+  id: string;
+  code: string;
+  name: string;
+  gstin: string | null;
+  pinCode: string | null;
+  city: string | null;
+  state: string | null;
+  address: string | null;
+  isActive: boolean;
 }
 
 export interface ManufacturerDto {

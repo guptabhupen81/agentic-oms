@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { session } from '../lib/api';
-import { AGENT_LINKS, MASTER_LINKS, SidebarNav } from './sidebar-nav';
+import { AGENT_LINKS, MASTER_LINKS, SidebarNav, linksForRole } from './sidebar-nav';
+import { MdmHome } from './mdm-home';
+import DistributorsPage from './masters/distributors/page';
 import { DashboardView } from './dashboard/dashboard-view';
 import OrdersPage from './orders/page';
 import DemandPage from './demand/page';
@@ -31,9 +33,15 @@ interface Tab {
   label: string;
 }
 
-function renderView(key: string, openTab: (key: string, label: string) => void) {
+function renderView(key: string, role: string | null, openTab: (key: string, label: string) => void) {
   switch (key) {
     case 'dashboard':
+      if (role === 'MDM_ADMIN') {
+        return <MdmHome onOpen={(k) => {
+          const link = ALL_LINKS.find((l) => l.key === k);
+          if (link) openTab(link.key, link.label);
+        }} />;
+      }
       return <DashboardView onOpen={(k) => {
         const link = ALL_LINKS.find((l) => l.key === k);
         if (link) openTab(link.key, link.label);
@@ -46,6 +54,7 @@ function renderView(key: string, openTab: (key: string, label: string) => void) 
     case 'van': return <VanPage />;
     case 'approvals': return <ApprovalsPage />;
     case 'trace': return <TracePage />;
+    case 'masters-distributors': return <DistributorsPage />;
     case 'masters-retailers': return <RetailersPage />;
     case 'masters-products': return <ProductsPage />;
     case 'masters-vans': return <VansMasterPage />;
@@ -70,6 +79,8 @@ function renderView(key: string, openTab: (key: string, label: string) => void) 
 export default function WorkspaceShell() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [profile, setProfile] = useState<string | null>(null);
   const [tabs, setTabs] = useState<Tab[]>([{ key: 'dashboard', label: 'Dashboard' }]);
   const [activeKey, setActiveKey] = useState('dashboard');
 
@@ -78,10 +89,15 @@ export default function WorkspaceShell() {
       router.push('/login');
       return;
     }
+    setRole(session.getRole());
+    setProfile(session.getProfile());
     setReady(true);
   }, [router]);
 
   function openTab(key: string, label: string) {
+    // A role can only open what its sidebar offers (the API enforces this too).
+    const allowed = linksForRole(role);
+    if (key !== 'dashboard' && ![...allowed.agents, ...allowed.masters].some((l) => l.key === key)) return;
     setTabs((current) => {
       if (current.some((t) => t.key === key)) return current;
       if (current.length >= MAX_TABS) {
@@ -118,8 +134,8 @@ export default function WorkspaceShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">Agentic OMS<span className="sub">FMCG distribution</span></div>
-        <SidebarNav activeKey={activeKey} onSelect={openTab} onLogout={handleLogout} />
+        <div className="brand">Agentic OMS<span className="sub">{profile ?? 'FMCG distribution'}</span></div>
+        <SidebarNav role={role} activeKey={activeKey} onSelect={openTab} onLogout={handleLogout} />
       </aside>
 
       <div className="workspace-shell">
@@ -146,7 +162,7 @@ export default function WorkspaceShell() {
         <div className="tab-content-area">
           {tabs.map((t) => (
             <div key={t.key} style={{ display: activeKey === t.key ? 'block' : 'none' }}>
-              {renderView(t.key, openTab)}
+              {renderView(t.key, role, openTab)}
             </div>
           ))}
         </div>

@@ -14,6 +14,7 @@ import type {
   InventoryStockDto,
   InvoiceDto,
   LoginResponse,
+  DistributorDto,
   ManufacturerDto,
   OrderListItemDto,
   OrderResponse,
@@ -46,6 +47,8 @@ import type {
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
 const TOKEN_KEY = 'oms_token';
 const USER_ID_KEY = 'oms_user_id';
+const ROLE_KEY = 'oms_role';
+const PROFILE_KEY = 'oms_profile';
 
 // Deliberately plain localStorage rather than a state library — this app is
 // small enough that prop drilling / a couple of hooks is the honest amount
@@ -56,9 +59,16 @@ export const session = {
   setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),
   getUserId: () => (typeof window === 'undefined' ? null : localStorage.getItem(USER_ID_KEY)),
   setUserId: (id: string) => localStorage.setItem(USER_ID_KEY, id),
+  getRole: () => (typeof window === 'undefined' ? null : localStorage.getItem(ROLE_KEY)),
+  setRole: (role: string) => localStorage.setItem(ROLE_KEY, role),
+  /** Display text for the sidebar, e.g. "DIST001 · Sunrise Distributors". */
+  getProfile: () => (typeof window === 'undefined' ? null : localStorage.getItem(PROFILE_KEY)),
+  setProfile: (text: string) => localStorage.setItem(PROFILE_KEY, text),
   clear: () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_ID_KEY);
+    localStorage.removeItem(ROLE_KEY);
+    localStorage.removeItem(PROFILE_KEY);
   },
 };
 
@@ -89,8 +99,24 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  login: (loginId: string, password: string) =>
+    request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ loginId, password }) }),
+
+  // --- Distributors (MDM_ADMIN) ---
+  listDistributors: () => request<DistributorDto[]>('/distributors'),
+  createDistributor: (body: { code: string; name: string; gstin?: string; pinCode?: string; address?: string; initialPassword: string }) =>
+    request<DistributorDto>('/distributors', { method: 'POST', body: JSON.stringify(body) }),
+  updateDistributor: (id: string, body: { name?: string; gstin?: string; pinCode?: string; address?: string }) =>
+    request<DistributorDto>(`/distributors/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggleDistributorActive: (id: string, isActive: boolean) =>
+    request<DistributorDto>(`/distributors/${id}/toggle-active`, { method: 'POST', body: JSON.stringify({ isActive }) }),
+  resetDistributorPassword: (id: string, newPassword: string) =>
+    request<{ reset: boolean }>(`/distributors/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
+
+  createManufacturer: (body: { name: string; gstin?: string }) =>
+    request<ManufacturerDto>('/manufacturers', { method: 'POST', body: JSON.stringify(body) }),
+  updateManufacturer: (id: string, body: { name?: string; gstin?: string }) =>
+    request<ManufacturerDto>(`/manufacturers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
   syncProducts: (sinceIso: string) => request<ProductDto[]>(`/products/sync?since=${encodeURIComponent(sinceIso)}`),
 

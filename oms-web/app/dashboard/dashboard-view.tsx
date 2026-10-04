@@ -19,14 +19,20 @@ export function DashboardView({ onOpen }: DashboardProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.listOrders(), api.listPurchaseOrders(), api.listAgentTasks(), api.listAgentEvents()])
+    // allSettled: the Agent Trace feed is not available to a DB Admin (403), and
+    // that must not blank the rest of the dashboard.
+    Promise.allSettled([api.listOrders(), api.listPurchaseOrders(), api.listAgentTasks(), api.listAgentEvents()])
       .then(([o, po, t, e]) => {
-        setOrders(o);
-        setPurchaseOrders(po);
-        setTasks(t);
-        setEvents(e);
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : String(err)));
+        if (o.status === 'fulfilled') setOrders(o.value);
+        if (po.status === 'fulfilled') setPurchaseOrders(po.value);
+        if (t.status === 'fulfilled') setTasks(t.value);
+        if (e.status === 'fulfilled') setEvents(e.value);
+        const firstFailure = [o, po, t].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+        if (firstFailure) {
+          const err = firstFailure.reason;
+          setError(err instanceof ApiError ? err.message : String(err));
+        }
+      });
   }, []);
 
   const validationHolds = orders.filter((o) => o.status === 'VALIDATION_HOLD').length;
