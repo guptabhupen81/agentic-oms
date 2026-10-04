@@ -1,7 +1,10 @@
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Post } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { AgentService } from './agent.service';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('agent')
 export class AgentController {
   constructor(private readonly agentService: AgentService) {}

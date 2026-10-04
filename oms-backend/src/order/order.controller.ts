@@ -1,19 +1,24 @@
 import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto';
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
+import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
+import { distributorScope } from '../common/scope.util';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
-  create(@Body() dto: CreateOrderDto) {
-    return this.orderService.createOrder(dto);
+  create(@Body() dto: CreateOrderDto, @CurrentUser() user: AuthUser) {
+    return this.orderService.createOrder(dto, distributorScope(user));
   }
 
   @Get()
-  listRecent(@Query('limit') limit?: string) {
-    return this.orderService.listRecent(limit ? Number(limit) : undefined);
+  listRecent(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
+    return this.orderService.listRecent(limit ? Number(limit) : undefined, distributorScope(user));
   }
 
   @Get(':id')

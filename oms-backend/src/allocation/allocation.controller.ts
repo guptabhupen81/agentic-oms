@@ -1,3 +1,5 @@
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Post } from '@nestjs/common';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { AllocationService } from './allocation.service';
@@ -12,6 +14,7 @@ class AllocateOrderDto {
   warehouseId: string;
 }
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('allocation')
 export class AllocationController {
   constructor(private readonly allocationService: AllocationService) {}

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { assertInScope } from '../common/scope.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { SellerType } from '@prisma/client';
 
@@ -13,30 +14,42 @@ export interface SalesmanInput {
 export class SalesmanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(activeOnly = true) {
+  async list(activeOnly = true, scope?: string) {
     return this.prisma.salesman.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
+      where: { ...(activeOnly ? { isActive: true } : {}), ...(scope ? { distributorId: scope } : {}) },
       include: { van: true },
       orderBy: { name: 'asc' },
     });
   }
 
-  async findById(id: string) {
-    return this.prisma.salesman.findUnique({
+  async findById(id: string, scope?: string) {
+    const salesman = await this.prisma.salesman.findUnique({
       where: { id },
       include: { van: true, retailerMappings: { include: { retailer: true } } },
     });
+    if (salesman) assertInScope(salesman.distributorId, scope, 'Salesman');
+    return salesman;
   }
 
-  async create(data: SalesmanInput) {
-    return this.prisma.salesman.create({ data });
+  private async assertOwnedSalesman(id: string, scope?: string) {
+    const salesman = await this.prisma.salesman.findUnique({ where: { id } });
+    if (!salesman) throw new NotFoundException('Salesman not found');
+    assertInScope(salesman.distributorId, scope, 'Salesman');
+    return salesman;
   }
 
-  async update(id: string, data: Partial<SalesmanInput>) {
+  async create(data: SalesmanInput, scope?: string) {
+    if (!scope) throw new BadRequestException('A salesman must be created under a distributor');
+    return this.prisma.salesman.create({ data: { ...data, distributorId: scope } });
+  }
+
+  async update(id: string, data: Partial<SalesmanInput>, scope?: string) {
+    await this.assertOwnedSalesman(id, scope);
     return this.prisma.salesman.update({ where: { id }, data });
   }
 
-  async setActive(id: string, isActive: boolean) {
+  async setActive(id: string, isActive: boolean, scope?: string) {
+    await this.assertOwnedSalesman(id, scope);
     return this.prisma.salesman.update({ where: { id }, data: { isActive } });
   }
 
@@ -52,20 +65,30 @@ export class SalesmanService {
   //    retailer doesn't get two Pre-Sellers at once).
   // -------------------------------------------------------------------
 
-  async listMappingsForRetailer(retailerId: string) {
+  async listMappingsForRetailer(retailerId: string, scope?: string) {
+    const retailer = await this.prisma.retailer.findUnique({ where: { id: retailerId } });
+    if (!retailer) throw new NotFoundException('Retailer not found');
+    assertInScope(retailer.distributorId, scope, 'Retailer');
     return this.prisma.retailerSalesmanMapping.findMany({
       where: { retailerId },
       include: { salesman: true },
     });
   }
 
-  async mapToRetailer(retailerId: string, salesmanId: string) {
+  async mapToRetailer(retailerId: string, salesmanId: string, scope?: string) {
     const [retailer, salesman] = await Promise.all([
       this.prisma.retailer.findUnique({ where: { id: retailerId } }),
       this.prisma.salesman.findUnique({ where: { id: salesmanId } }),
     ]);
     if (!retailer) throw new BadRequestException('Retailer not found');
     if (!salesman) throw new BadRequestException('Salesman not found');
+    assertInScope(retailer.distributorId, scope, 'Retailer');
+    assertInScope(salesman.distributorId, scope, 'Salesman');
+    // Always enforced (even for an unscoped caller): a retailer can only be served
+    // by a salesman of the same distributor.
+    if (retailer.distributorId !== salesman.distributorId) {
+      throw new BadRequestException('Retailer and salesman belong to different distributors');
+    }
 
     const existingMappings = await this.prisma.retailerSalesmanMapping.findMany({
       where: { retailerId },
@@ -98,7 +121,10 @@ export class SalesmanService {
     });
   }
 
-  async unmapFromRetailer(mappingId: string) {
+  async unmapFromRetailer(mappingId: string, scope?: string) {
+    const mapping = await this.prisma.retailerSalesmanMapping.findUnique({ where: { id: mappingId }, include: { retailer: true } });
+    if (!mapping) throw new NotFoundException('Mapping not found');
+    assertInScope(mapping.retailer.distributorId, scope, 'Mapping');
     return this.prisma.retailerSalesmanMapping.delete({ where: { id: mappingId } });
   }
 
@@ -110,7 +136,7 @@ export class SalesmanService {
   // schema, which also means a salesman can back at most one van at a time).
   // -------------------------------------------------------------------
 
-  async assignVan(salesmanId: string, vanId: string) {
+  async assignVan(salesmanId: string, vanId: string, scope?: string) {
     const salesman = await this.prisma.salesman.findUnique({ where: { id: salesmanId } });
     if (!salesman) throw new BadRequestException('Salesman not found');
     if (salesman.sellerType === SellerType.PRE_SELLER) {
@@ -119,6 +145,11 @@ export class SalesmanService {
 
     const van = await this.prisma.van.findUnique({ where: { id: vanId } });
     if (!van) throw new BadRequestException('Van not found');
+    assertInScope(salesman.distributorId, scope, 'Salesman');
+    assertInScope(van.distributorId, scope, 'Van');
+    if (van.distributorId !== salesman.distributorId) {
+      throw new BadRequestException('Salesman and van belong to different distributors');
+    }
     if (van.assignedSalesmanId && van.assignedSalesmanId !== salesmanId) {
       throw new BadRequestException('This van already has a salesman mapped — unassign it first');
     }
@@ -130,7 +161,10 @@ export class SalesmanService {
     });
   }
 
-  async unassignVan(vanId: string) {
+  async unassignVan(vanId: string, scope?: string) {
+    const van = await this.prisma.van.findUnique({ where: { id: vanId } });
+    if (!van) throw new NotFoundException('Van not found');
+    assertInScope(van.distributorId, scope, 'Van');
     return this.prisma.van.update({
       where: { id: vanId },
       data: { assignedSalesmanId: null },

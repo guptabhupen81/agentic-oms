@@ -1,6 +1,9 @@
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Post } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('invoices')
 export class InvoiceController {
   constructor(private readonly invoiceService: InvoiceService) {}

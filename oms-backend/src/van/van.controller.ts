@@ -1,6 +1,9 @@
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { VanService } from './van.service';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('van-loads')
 export class VanController {
   constructor(private readonly vanService: VanService) {}

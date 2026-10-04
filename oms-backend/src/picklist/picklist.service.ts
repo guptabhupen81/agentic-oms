@@ -144,12 +144,13 @@ export class PicklistService {
    * — a van mapped to a Van-Seller (secondary direct-sale role) is not a
    * delivery vehicle and must not accept picklists.
    */
-  async assignVan(picklistId: string, vanId: string) {
+  async assignVan(picklistId: string, vanId: string, scope?: string) {
     const picklist = await this.prisma.picklist.findUnique({ where: { id: picklistId } });
     if (!picklist) throw new BadRequestException('Picklist not found');
 
     const van = await this.prisma.van.findUnique({ where: { id: vanId }, include: { assignedSalesman: true } });
     if (!van) throw new BadRequestException('Van not found');
+    if (scope && van.distributorId !== scope) throw new BadRequestException('Van not found');
     if (!van.assignedSalesman || van.assignedSalesman.sellerType !== SellerType.DELIVERY_BOY) {
       throw new BadRequestException(
         'Picklists may only be loaded onto a van mapped to a Delivery Boy salesman',

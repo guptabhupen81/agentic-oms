@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { assertInScope } from '../common/scope.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { isValidGstin } from '../common/gstin.util';
 import { lookupPincode } from '../common/pincode.util';
@@ -17,16 +18,25 @@ export interface RetailerInput {
 export class RetailerService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(activeOnly = true) {
+  async list(activeOnly = true, scope?: string) {
     return this.prisma.retailer.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
+      where: { ...(activeOnly ? { isActive: true } : {}), ...(scope ? { distributorId: scope } : {}) },
       include: { channelNode: true },
       orderBy: { name: 'asc' },
     });
   }
 
-  async findById(id: string) {
-    return this.prisma.retailer.findUnique({ where: { id }, include: { channelNode: true } });
+  async findById(id: string, scope?: string) {
+    const retailer = await this.prisma.retailer.findUnique({ where: { id }, include: { channelNode: true } });
+    if (retailer) assertInScope(retailer.distributorId, scope, 'Retailer');
+    return retailer;
+  }
+
+  /** Throws 404 unless the retailer exists inside the caller's distributor scope. */
+  private async assertOwned(id: string, scope?: string) {
+    const retailer = await this.prisma.retailer.findUnique({ where: { id } });
+    if (!retailer) assertInScope(null, scope ?? '__none__', 'Retailer');
+    assertInScope(retailer!.distributorId, scope, 'Retailer');
   }
 
   /** Exposed standalone so the frontend can preview City/State as the user
@@ -35,7 +45,8 @@ export class RetailerService {
     return lookupPincode(pinCode);
   }
 
-  async create(data: RetailerInput) {
+  async create(data: RetailerInput, scope?: string) {
+    if (!scope) throw new BadRequestException('A retailer must be created under a distributor');
     const derived = await this.prepareGeoAndValidate(data);
     return this.prisma.retailer.create({
       data: {
@@ -48,11 +59,13 @@ export class RetailerService {
         address: data.address,
         creditLimitAmount: data.creditLimitAmount,
         channelNodeId: derived.channelNodeId,
+        distributorId: scope,
       },
     });
   }
 
-  async update(id: string, data: Partial<RetailerInput>) {
+  async update(id: string, data: Partial<RetailerInput>, scope?: string) {
+    await this.assertOwned(id, scope);
     const derived = await this.prepareGeoAndValidate(data);
     return this.prisma.retailer.update({
       where: { id },
@@ -70,7 +83,8 @@ export class RetailerService {
     });
   }
 
-  async setActive(id: string, isActive: boolean) {
+  async setActive(id: string, isActive: boolean, scope?: string) {
+    await this.assertOwned(id, scope);
     return this.prisma.retailer.update({ where: { id }, data: { isActive } });
   }
 

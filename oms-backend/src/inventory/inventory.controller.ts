@@ -1,6 +1,9 @@
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}

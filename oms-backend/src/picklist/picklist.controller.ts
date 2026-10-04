@@ -1,6 +1,11 @@
+import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
+import { distributorScope } from '../common/scope.util';
+import { Roles } from '../auth/roles.decorator';
+import { DISTRIBUTOR_SIDE_ROLES } from '../auth/roles.constants';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { PicklistService } from './picklist.service';
 
+@Roles(...DISTRIBUTOR_SIDE_ROLES)
 @Controller('picklists')
 export class PicklistController {
   constructor(private readonly picklistService: PicklistService) {}
@@ -36,7 +41,7 @@ export class PicklistController {
   }
 
   @Post(':id/assign-van')
-  assignVan(@Param('id') id: string, @Body() body: { vanId: string }) {
-    return this.picklistService.assignVan(id, body.vanId);
+  assignVan(@Param('id') id: string, @Body() body: { vanId: string }, @CurrentUser() user: AuthUser) {
+    return this.picklistService.assignVan(id, body.vanId, distributorScope(user));
   }
 }

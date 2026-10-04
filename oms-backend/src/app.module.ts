@@ -16,6 +16,7 @@ import { MastersModule } from './masters/masters.module';
 import { ForecastModule } from './forecast/forecast.module';
 import { SalesmanModule } from './salesman/salesman.module';
 import { ChannelHierarchyModule } from './channel-hierarchy/channel-hierarchy.module';
+import { DistributorModule } from './distributor/distributor.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ChannelHierarchyModule } from './channel-hierarchy/channel-hierarchy.mo
     ForecastModule,
     SalesmanModule,
     ChannelHierarchyModule,
+    DistributorModule,
   ],
 })
 export class AppModule {}

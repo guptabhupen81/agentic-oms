@@ -22,6 +22,8 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 enum UserRole {
+  MDM_ADMIN // Master-data admin: creates/edits Distributors, Products, Trucks, Warehouses, Manufacturers + hierarchies
+  DB_ADMIN  // Distributor admin: creates/edits Retailers, Salesmen, Vans and runs the Agents, scoped to ONE distributor
   ADMIN
   OMS_EXECUTIVE
   PRESELLER
@@ -32,15 +34,47 @@ enum UserRole {
 model User {
   id           String     @id @default(cuid())
   name         String
-  email        String     @unique
+  // Login ID: the Distributor code for a DB_ADMIN, the literal "MDM_Admin" for the MDM admin.
+  loginId      String     @unique
+  email        String?    @unique
   passwordHash String
   role         UserRole
   createdAt    DateTime   @default(now())
+
+  // Set for DB_ADMIN users — every request they make is scoped to this distributor.
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
 
   ordersCreated   Order[]      @relation("OrderCreatedBy")
   picklists       Picklist[]   @relation("PicklistAssignedTo")
   vanLoads        VanLoad[]    @relation("VanLoadOperator")
   resolvedTasks   AgentTask[]
+}
+
+// ---------------------------------------------------------------------------
+// Distributor — created by MDM_ADMIN. Each distributor gets one DB_ADMIN login
+// whose loginId equals the distributor code. Retailers, Salesmen and Vans are
+// created under a distributor (distributorId is nullable at the DB level only so
+// `prisma db push` works on a database that already has rows; the services always
+// stamp it on create).
+// ---------------------------------------------------------------------------
+
+model Distributor {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  gstin     String?
+  pinCode   String?
+  city      String?
+  state     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users     User[]
+  retailers Retailer[]
+  salesmen  Salesman[]
+  vans      Van[]
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +197,9 @@ model Van {
 
   vanLoads     VanLoad[]
 
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
+
   // Seller<->Van mapping: only a Van-Seller or Delivery-Boy salesman may be
   // mapped, and one van holds at most one salesman at a time. The unique
   // constraint here (the FK is on Van, pointing at Salesman) enforces both
@@ -230,6 +267,9 @@ model Retailer {
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
 
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
+
   // Retailers map only to a Level-2 Channel Hierarchy node.
   channelNodeId String?
   channelNode   ChannelHierarchyNode? @relation(fields: [channelNodeId], references: [id])
@@ -257,6 +297,9 @@ model Salesman {
   sellerType SellerType
   isActive   Boolean    @default(true)
   createdAt  DateTime   @default(now())
+
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
 
   retailerMappings RetailerSalesmanMapping[]
   van              Van? // opposite side of Van.assignedSalesman (0-or-1 van at a time)

@@ -56,7 +56,13 @@ export class OrderService {
    * retried after a dropped connection), the existing order is returned
    * unchanged rather than creating a duplicate.
    */
-  async createOrder(dto: CreateOrderDto) {
+  async createOrder(dto: CreateOrderDto, scope?: string) {
+    if (scope) {
+      const retailer = await this.prisma.retailer.findUnique({ where: { id: dto.retailerId } });
+      if (!retailer || retailer.distributorId !== scope) {
+        throw new BadRequestException('Retailer does not belong to your distributor');
+      }
+    }
     const existing = await this.prisma.order.findUnique({
       where: { clientOrderId: dto.clientOrderId },
       include: { lines: true },
@@ -97,8 +103,9 @@ export class OrderService {
   /** Recent orders across all users — powers the transaction list on the
    * Orders page. Includes each order's computed value so the list itself is
    * useful without an extra round-trip per row. */
-  async listRecent(limit = 50) {
+  async listRecent(limit = 50, scope?: string) {
     const orders = await this.prisma.order.findMany({
+      where: scope ? { retailer: { distributorId: scope } } : undefined,
       orderBy: { orderDate: 'desc' },
       take: limit,
       include: { retailer: true, lines: { include: { product: true } } },

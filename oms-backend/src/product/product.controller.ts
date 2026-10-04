@@ -1,3 +1,5 @@
+import { UserRole } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ProductService } from './product.service';
 
@@ -10,16 +12,19 @@ export class ProductController {
     return this.productService.getHierarchyTree();
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Post('hierarchy')
   createHierarchyNode(@Body() body: { name: string; parentId?: string }) {
     return this.productService.createHierarchyNode(body);
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Patch('hierarchy/:id')
   updateHierarchyNode(@Param('id') id: string, @Body() body: { name?: string; parentId?: string | null }) {
     return this.productService.updateHierarchyNode(id, body);
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Delete('hierarchy/:id')
   deleteHierarchyNode(@Param('id') id: string) {
     return this.productService.deleteHierarchyNode(id);
@@ -43,6 +48,7 @@ export class ProductController {
     return this.productService.findById(id);
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Post()
   create(
     @Body()
@@ -66,11 +72,13 @@ export class ProductController {
     return this.productService.create(body);
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.productService.update(id, body);
   }
 
+  @Roles(UserRole.MDM_ADMIN)
   @Post(':id/toggle-active')
   toggleActive(@Param('id') id: string, @Body() body: { isActive: boolean }) {
     return this.productService.setActive(id, body.isActive);
